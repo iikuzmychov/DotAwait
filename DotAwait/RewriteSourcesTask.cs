@@ -15,6 +15,9 @@ public class RewriteSourcesTask : Microsoft.Build.Utilities.Task
     [Required]
     public string OutputDirectory { get; set; }
 
+    [Required]
+    public string ProjectPath { get; set; }
+
     [Output]
     public ITaskItem[] RewrittenFiles { get; private set; }
 
@@ -42,29 +45,39 @@ public class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
     private string Transform(string path, string source)
     {
-        // Парсим в дерево
         var tree = CSharpSyntaxTree.ParseText(source);
         var root = tree.GetCompilationUnitRoot();
 
-        // Пример: найдём все методы и выведем их имена в Output (можно и менять)
-        var methods = root.DescendantNodes()
-            .OfType<MethodDeclarationSyntax>()
-            .Select(m => m.Identifier.Text);
+        var newRoot = root.ReplaceNodes(
+            root.DescendantNodes().OfType<InvocationExpressionSyntax>()
+            .Where(inv =>
+                inv.Expression is MemberAccessExpressionSyntax member &&
+                member.Expression is IdentifierNameSyntax ident &&
+                ident.Identifier.Text == "Console" &&
+                member.Name.Identifier.Text == "WriteLine" &&
+                inv.ArgumentList.Arguments.Count == 1
+            ),
+            (oldNode, _) =>
+            {
+                var newArg = SyntaxFactory.Argument(
+                    SyntaxFactory.LiteralExpression(
+                        SyntaxKind.StringLiteralExpression,
+                        SyntaxFactory.Literal("ААААААААА")
+                    )
+                ).WithTriviaFrom(oldNode.ArgumentList.Arguments[0]);
 
-        Log.LogMessage(MessageImportance.High, $"Found methods in {path}: {string.Join(", ", methods)}");
+                var newArgs = SyntaxFactory.SeparatedList(new[] { newArg });
+                var newArgList = oldNode.ArgumentList.WithArguments(newArgs);
 
-        // (опционально) модифицировать дерево
-        //var newRoot = root.ReplaceNodes(
-        //    root.DescendantNodes().OfType<MethodDeclarationSyntax>(),
-        //    (oldNode, _) => oldNode.WithIdentifier(SyntaxFactory.Identifier(oldNode.Identifier.Text + "_patched"))
-        //);
+                return oldNode.WithArgumentList(newArgList);
+            });
 
-        // Сериализуем обратно
-        //var rewritten = newRoot.NormalizeWhitespace().ToFullString();
+        var rewritten = newRoot.ToFullString(); // ⚠ НЕ NormalizeWhitespace()
 
-        // Вставим директиву #line
-        return $@"#line 1 ""{path}""
-{source}
-#line default";
+        return $"""
+        #line 1 "{path}"
+        {rewritten}
+        #line default
+        """;
     }
 }
