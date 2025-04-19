@@ -1,0 +1,31 @@
+<Project>
+  
+  <!--<UsingTask AssemblyFile="$(TargetDir)DotAwait.dll" TaskName="RewriteSourcesTask" />-->
+  <UsingTask AssemblyFile="$(MSBuildThisFileDirectory)..\DotAwait\bin\Debug\netstandard2.0\DotAwait.dll" TaskName="RewriteSourcesTask" />
+
+  <PropertyGroup>
+    <RewrittenDir>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\Rewritten</RewrittenDir>
+    <OriginalsForIDE>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\OriginalsForIDE</OriginalsForIDE>
+  </PropertyGroup>
+
+  <Target Name="RewriteSources" Inputs="@(Compile)" Outputs="$(RewrittenDir)\_done.flag" BeforeTargets="CoreCompile">
+
+    <MakeDir Directories="$(RewrittenDir)" />
+
+    <RewriteSourcesTask Compile="@(Compile)" OutputDirectory="$(RewrittenDir)">
+      <Output TaskParameter="RewrittenFiles" ItemName="RewrittenCompile" />
+    </RewriteSourcesTask>
+    
+    <Message Text="Rewritede sources: @(RewrittenCompile)" Importance="high" />
+
+    <ItemGroup>
+      <Compile Remove="@(Compile)" />
+      <None Include="@(Compile)" />
+      <Compile Include="@(RewrittenCompile)" />
+    </ItemGroup>
+
+    <WriteLinesToFile File="$(RewrittenDir)\_done.flag" Lines="done" />
+      
+  </Target>
+  
+</Project>
