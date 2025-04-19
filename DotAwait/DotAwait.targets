@@ -39,4 +39,10 @@
 
     <WriteLinesToFile File="$(RewrittenDir)\_done.flag" Lines="done" />
   </Target>
+
+  <!-- Добавим очистку при Clean -->
+  <Target Name="CleanRewritten" AfterTargets="Clean">
+    <Message Text="🧹 Post-Clean: deleting $(RewrittenDir)" Importance="High" />
+    <RemoveDir Directories="$(RewrittenDir)" />
+  </Target>
 </Project>
