@@ -1,48 +1,29 @@
 <Project>
-  <UsingTask AssemblyFile="$(MSBuildThisFileDirectory)..\DotAwait\bin\Debug\netstandard2.0\DotAwait.dll"
-             TaskName="RewriteSourcesTask" />
 
   <PropertyGroup>
-    <RewrittenDir>$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\Rewritten</RewrittenDir>
+    <DotAwaitDll>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)\bin\Debug\net8.0\DotAwait.dll'))</DotAwaitDll>
   </PropertyGroup>
 
-  <!-- Добавим таску в цепочку CoreCompile -->
-  <PropertyGroup>
-    <CoreCompileDependsOn>
-      RewriteSources;
-      $(CoreCompileDependsOn)
-    </CoreCompileDependsOn>
-  </PropertyGroup>
+  <UsingTask TaskName="DotAwait.RewriteSourcesTask" AssemblyFile="$(DotAwaitDll)" Condition="Exists('$(DotAwaitDll)')" />
+  
+  <UsingTask
+    TaskName="DotAwait.RewriteSourcesTask"
+    AssemblyFile="$(OutputPath)DotAwait.dll"
+    Condition="Exists('$(OutputPath)DotAwait.dll')" />
 
-  <Target Name="RewriteSources"
-          Inputs="@(Compile)"
-          Outputs="$(RewrittenDir)\_done.flag">
+  <UsingTask
+    TaskName="DotAwait.RewriteSourcesTask"
+    AssemblyFile="$(MSBuildThisFileDirectory)..\lib\net8.0\DotAwait.dll"
+    Condition="Exists('$(MSBuildThisFileDirectory)..\lib\net8.0\DotAwait.dll')" />
 
-    <MakeDir Directories="$(RewrittenDir)" />
+  <Target Name="DotAwait_PatchAfterBuild" AfterTargets="Build" Condition="'$(IsDotAwaitRewritingInProgress)' != 'true'">
+    
+    <Message Importance="High" Text="[DotAwait] $(DotAwaitDll)" />
+    <Message Importance="High" Text="[DotAwait] $(IsDotAwaitRewritingInProgress)" />
+    <Message Importance="High" Text="[DotAwait] $(MSBuildProjectFullPath)" />
 
-    <RewriteSourcesTask Compile="@(Compile)"
-                        OutputDirectory="$(RewrittenDir)"
-                        ProjectPath="$(MSBuildProjectFullPath)">
-      <Output TaskParameter="RewrittenFiles" ItemName="RewrittenCompile" />
-    </RewriteSourcesTask>
-
-    <ItemGroup>
-      <_OriginalCompile Include="@(Compile)" />
-      <Compile Remove="@(Compile)" />
-      <Compile Include="@(RewrittenCompile)" />
-    </ItemGroup>
-
-    <!-- (опционально) добавим оригиналы как None, чтобы не пропадали из IDE -->
-    <ItemGroup>
-      <None Include="@(_OriginalCompile)" Condition="'$(BuildingInsideVisualStudio)' == 'true'" />
-    </ItemGroup>
-
-    <WriteLinesToFile File="$(RewrittenDir)\_done.flag" Lines="done" />
+    <RewriteSourcesTask ProjectPath="$(MSBuildProjectFullPath)" OutputDirectory="$(OutputPath)" />
+    
   </Target>
 
-  <!-- Добавим очистку при Clean -->
-  <Target Name="CleanRewritten" AfterTargets="Clean">
-    <Message Text="🧹 Post-Clean: deleting $(RewrittenDir)" Importance="High" />
-    <RemoveDir Directories="$(RewrittenDir)" />
-  </Target>
 </Project>

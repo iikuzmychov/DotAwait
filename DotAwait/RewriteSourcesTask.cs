@@ -1,83 +1,103 @@
-﻿using Microsoft.Build.Framework;
-using Microsoft.Build.Utilities;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.CSharp;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using Microsoft.Build.Framework;
+using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.MSBuild;
+using Microsoft.CodeAnalysis.Text;
 
 namespace DotAwait;
 
 public class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 {
     [Required]
-    public ITaskItem[] Compile { get; set; }
+    public string ProjectPath { get; set; } = string.Empty;
 
     [Required]
-    public string OutputDirectory { get; set; }
-
-    [Required]
-    public string ProjectPath { get; set; }
-
-    [Output]
-    public ITaskItem[] RewrittenFiles { get; private set; }
+    public string OutputDirectory { get; set; } = string.Empty;
 
     public override bool Execute()
     {
-        //Debugger.Launch();
+        Debugger.Launch();
+        Debugger.Break();
 
-        var rewritten = new List<ITaskItem>();
-        Directory.CreateDirectory(OutputDirectory);
-
-        foreach (var item in Compile)
+        try
         {
-            var source = File.ReadAllText(item.ItemSpec);
-            var transformed = Transform(Path.GetFullPath(item.ItemSpec), source);
-            var filename = Path.GetFileName(item.ItemSpec);
-            var outputPath = Path.GetFullPath(Path.Combine(OutputDirectory, filename));
-            File.WriteAllText(outputPath, transformed);
+            //MSBuildLocator.RegisterDefaults();
+            Directory.CreateDirectory(OutputDirectory);
+            Log.LogMessage(MessageImportance.High, $"[DotAwait] Loading project: {ProjectPath}");
 
-            rewritten.Add(new TaskItem(outputPath));
+            using var workspace = MSBuildWorkspace.Create(new Dictionary<string, string>
+            {
+                ["IsDotAwaitRewritingInProgress"] = "true"
+            });
+
+            var project = workspace.OpenProjectAsync(ProjectPath).Result;
+            var solution = project.Solution;
+            var projectId = project.Id;
+
+            var newSolution = solution;
+            foreach (var doc in project.Documents)
+            {
+                var original = doc.GetTextAsync().Result.ToString();
+                var rewritten = TransformAst(original);
+
+                var withDirectives = SourceText.From($"""
+                    #line 1 "{Path.GetFullPath(doc.FilePath)}"
+                    {rewritten}
+                    #line default
+                    """);
+
+                newSolution = newSolution.WithDocumentText(doc.Id, withDirectives);
+            }
+
+            project = newSolution.GetProject(projectId)!;
+            Log.LogMessage(MessageImportance.High, "[DotAwait] Recompiling with transformed AST...");
+
+            var compilation = project.GetCompilationAsync().Result;
+            var emitPath = Path.Combine(OutputDirectory, Path.GetFileName(ProjectPath).Replace(".csproj", ".dll"));
+            var result = compilation.Emit(emitPath);
+
+            if (!result.Success)
+            {
+                foreach (var diag in result.Diagnostics)
+                    Log.LogError(diag.ToString());
+                return false;
+            }
+
+            Log.LogMessage(MessageImportance.High, $"[DotAwait] Emitted patched assembly: {emitPath}");
+            return true;
         }
-
-        RewrittenFiles = rewritten.ToArray();
-        return true;
+        catch (Exception ex)
+        {
+            Log.LogErrorFromException(ex, showStackTrace: true);
+            return false;
+        }
     }
 
-    private string Transform(string path, string source)
+    private string TransformAst(string source)
     {
         var tree = CSharpSyntaxTree.ParseText(source);
         var root = tree.GetCompilationUnitRoot();
+        var rewriter = new AwaitRewriter();
+        var newRoot = (CompilationUnitSyntax)rewriter.Visit(root);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+}
 
-        var newRoot = root.ReplaceNodes(
-            root.DescendantNodes().OfType<InvocationExpressionSyntax>()
-            .Where(inv =>
-                inv.Expression is MemberAccessExpressionSyntax member &&
-                member.Expression is IdentifierNameSyntax ident &&
-                ident.Identifier.Text == "Console" &&
-                member.Name.Identifier.Text == "WriteLine" &&
-                inv.ArgumentList.Arguments.Count == 1
-            ),
-            (oldNode, _) =>
-            {
-                var newArg = SyntaxFactory.Argument(
-                    SyntaxFactory.LiteralExpression(
-                        SyntaxKind.StringLiteralExpression,
-                        SyntaxFactory.Literal("ААААААААА")
-                    )
-                ).WithTriviaFrom(oldNode.ArgumentList.Arguments[0]);
-
-                var newArgs = SyntaxFactory.SeparatedList(new[] { newArg });
-                var newArgList = oldNode.ArgumentList.WithArguments(newArgs);
-
-                return oldNode.WithArgumentList(newArgList);
-            });
-
-        var rewritten = newRoot.ToFullString(); // ⚠ НЕ NormalizeWhitespace()
-
-        return $"""
-        #line 1 "{path}"
-        {rewritten}
-        #line default
-        """;
+internal class AwaitRewriter : CSharpSyntaxRewriter
+{
+    public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
+    {
+        if (node.Expression is MemberAccessExpressionSyntax member &&
+            member.Name.Identifier.Text == "Await" &&
+            member.Expression is ExpressionSyntax expr)
+        {
+            // xxx.Await() -> await xxx
+            return SyntaxFactory.AwaitExpression(expr.WithoutTrivia())
+                                 .WithTriviaFrom(node);
+        }
+        return base.VisitInvocationExpression(node);
     }
 }
