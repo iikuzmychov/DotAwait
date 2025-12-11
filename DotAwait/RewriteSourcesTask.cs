@@ -1,72 +1,72 @@
-﻿using System.Diagnostics;
-using Microsoft.Build.Framework;
-using Microsoft.Build.Locator;
+﻿using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.MSBuild;
-using Microsoft.CodeAnalysis.Text;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace DotAwait;
 
-public class RewriteSourcesTask : Microsoft.Build.Utilities.Task
+public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 {
-    [Required]
-    public string ProjectPath { get; set; } = string.Empty;
+    [Required] public ITaskItem[] Sources { get; set; } = Array.Empty<ITaskItem>();
+    [Required] public string ProjectDirectory { get; set; } = "";
+    [Required] public string OutputDirectory { get; set; } = "";
+    public string DefineConstants { get; set; } = "";
+    public string LangVersion { get; set; } = "latest";
 
-    [Required]
-    public string OutputDirectory { get; set; } = string.Empty;
+    [Output] public ITaskItem[] RewrittenSources { get; set; } = Array.Empty<ITaskItem>();
 
     public override bool Execute()
     {
-        Debugger.Launch();
-        Debugger.Break();
-
         try
         {
-            //MSBuildLocator.RegisterDefaults();
             Directory.CreateDirectory(OutputDirectory);
-            Log.LogMessage(MessageImportance.High, $"[DotAwait] Loading project: {ProjectPath}");
 
-            using var workspace = MSBuildWorkspace.Create(new Dictionary<string, string>
+            var parseOptions = new CSharpParseOptions(
+                ParseLangVersion(LangVersion),
+                preprocessorSymbols: SplitConstants(DefineConstants));
+
+            var rewritten = new List<ITaskItem>(Sources.Length);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var src in Sources)
             {
-                ["IsDotAwaitRewritingInProgress"] = "true"
-            });
+                var fullPath = src.GetMetadata("FullPath");
+                if (string.IsNullOrWhiteSpace(fullPath))
+                    continue;
 
-            var project = workspace.OpenProjectAsync(ProjectPath).Result;
-            var solution = project.Solution;
-            var projectId = project.Id;
+                fullPath = Path.GetFullPath(fullPath);
+                if (!seen.Add(fullPath))
+                    continue;
 
-            var newSolution = solution;
-            foreach (var doc in project.Documents)
-            {
-                var original = doc.GetTextAsync().Result.ToString();
-                var rewritten = TransformAst(original);
+                if (!fullPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (!File.Exists(fullPath))
+                    continue;
 
-                var withDirectives = SourceText.From($"""
-                    #line 1 "{Path.GetFullPath(doc.FilePath)}"
-                    {rewritten}
-                    #line default
-                    """);
+                var outPath = MapOutputPath(fullPath, ProjectDirectory, OutputDirectory);
+                Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
 
-                newSolution = newSolution.WithDocumentText(doc.Id, withDirectives);
+                var original = File.ReadAllText(fullPath, Encoding.UTF8);
+
+                var tree = CSharpSyntaxTree.ParseText(original, parseOptions, path: fullPath);
+                var root = tree.GetRoot();
+                var newRoot = new AwaitRewriter().Visit(root);
+
+                var rewrittenText = newRoot.ToFullString();
+
+                // Keep diagnostics/stack traces pointing to the original file.
+                var withLine = "#line 1 \"" + fullPath + "\"\n" + rewrittenText + "\n#line default\n";
+                File.WriteAllText(outPath, withLine, Encoding.UTF8);
+
+                var item = new TaskItem(outPath);
+                src.CopyMetadataTo(item);
+                rewritten.Add(item);
             }
 
-            project = newSolution.GetProject(projectId)!;
-            Log.LogMessage(MessageImportance.High, "[DotAwait] Recompiling with transformed AST...");
-
-            var compilation = project.GetCompilationAsync().Result;
-            var emitPath = Path.Combine(OutputDirectory, Path.GetFileName(ProjectPath).Replace(".csproj", ".dll"));
-            var result = compilation.Emit(emitPath);
-
-            if (!result.Success)
-            {
-                foreach (var diag in result.Diagnostics)
-                    Log.LogError(diag.ToString());
-                return false;
-            }
-
-            Log.LogMessage(MessageImportance.High, $"[DotAwait] Emitted patched assembly: {emitPath}");
+            RewrittenSources = rewritten.ToArray();
             return true;
         }
         catch (Exception ex)
@@ -76,28 +76,144 @@ public class RewriteSourcesTask : Microsoft.Build.Utilities.Task
         }
     }
 
-    private string TransformAst(string source)
+    static string[] SplitConstants(string s)
     {
-        var tree = CSharpSyntaxTree.ParseText(source);
-        var root = tree.GetCompilationUnitRoot();
-        var rewriter = new AwaitRewriter();
-        var newRoot = (CompilationUnitSyntax)rewriter.Visit(root);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        if (string.IsNullOrWhiteSpace(s))
+            return Array.Empty<string>();
+        return s.Split(new[] { ';', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim())
+                .Where(x => x.Length != 0)
+                .ToArray();
     }
-}
 
-internal class AwaitRewriter : CSharpSyntaxRewriter
-{
-    public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
+    static LanguageVersion ParseLangVersion(string s)
     {
-        if (node.Expression is MemberAccessExpressionSyntax member &&
-            member.Name.Identifier.Text == "Await" &&
-            member.Expression is ExpressionSyntax expr)
+        if (string.IsNullOrWhiteSpace(s))
+            return LanguageVersion.Latest;
+        var normalized = s.Replace('.', '_');
+        return Enum.TryParse(normalized, true, out LanguageVersion v) ? v : LanguageVersion.Latest;
+    }
+
+    static string MapOutputPath(string file, string projectDir, string outDir)
+    {
+        var full = Path.GetFullPath(file);
+        var root = Path.GetFullPath(projectDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        if (full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {
-            // xxx.Await() -> await xxx
-            return SyntaxFactory.AwaitExpression(expr.WithoutTrivia())
-                                 .WithTriviaFrom(node);
+            var rel = GetRelativePathNs20(root, full);
+            return Path.Combine(outDir, rel);
         }
-        return base.VisitInvocationExpression(node);
+
+        var name = Hex(Sha256(Encoding.UTF8.GetBytes(full))).Substring(0, 16);
+        return Path.Combine(outDir, "_external", name, Path.GetFileName(full));
+    }
+
+    static string GetRelativePathNs20(string baseDir, string fullPath)
+    {
+        baseDir = Path.GetFullPath(baseDir);
+        fullPath = Path.GetFullPath(fullPath);
+
+        if (!baseDir.EndsWith(Path.DirectorySeparatorChar.ToString()))
+            baseDir += Path.DirectorySeparatorChar;
+
+        var baseUri = new Uri(baseDir, UriKind.Absolute);
+        var fullUri = new Uri(fullPath, UriKind.Absolute);
+
+        var relUri = baseUri.MakeRelativeUri(fullUri);
+        var rel = Uri.UnescapeDataString(relUri.ToString());
+
+        return rel.Replace('/', Path.DirectorySeparatorChar);
+    }
+
+    static byte[] Sha256(byte[] data)
+    {
+        using (var sha = SHA256.Create())
+            return sha.ComputeHash(data);
+    }
+
+    static string Hex(byte[] bytes)
+    {
+        var c = new char[bytes.Length * 2];
+        var i = 0;
+        foreach (var b in bytes)
+        {
+            var hi = (b >> 4) & 0xF;
+            var lo = b & 0xF;
+            c[i++] = (char)(hi < 10 ? '0' + hi : 'A' + (hi - 10));
+            c[i++] = (char)(lo < 10 ? '0' + lo : 'A' + (lo - 10));
+        }
+        return new string(c);
+    }
+
+    sealed class AwaitRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            node = (InvocationExpressionSyntax)base.VisitInvocationExpression(node)!;
+
+            if (node.ArgumentList.Arguments.Count != 0)
+                return node;
+            if (node.Expression is not MemberAccessExpressionSyntax ma)
+                return node;
+            if (ma.Name is not IdentifierNameSyntax id || id.Identifier.ValueText != "Await")
+                return node;
+
+            if (!IsAwaitAllowedHere(node))
+                return node;
+
+            // await x.Await() -> await x
+            if (node.Parent is AwaitExpressionSyntax ae && ae.Expression == node)
+                return ma.Expression.WithTriviaFrom(node);
+
+            // x.Await() -> await(x)  (avoids "awaitFoo" token gluing)
+            var expr = ma.Expression.WithoutTrivia();
+            var operand = expr is ParenthesizedExpressionSyntax ? expr : SyntaxFactory.ParenthesizedExpression(expr);
+            return SyntaxFactory.AwaitExpression(operand).WithTriviaFrom(node);
+        }
+
+        static bool IsAwaitAllowedHere(SyntaxNode node)
+        {
+            if (node.Ancestors().Any(a => a is AttributeSyntax))
+                return false;
+
+            if (node.Ancestors().OfType<InvocationExpressionSyntax>().Any(IsNameofInvocation))
+                return false;
+
+            if (node.Ancestors().OfType<GlobalStatementSyntax>().Any())
+                return true;
+
+            foreach (var a in node.Ancestors())
+            {
+                switch (a)
+                {
+                    case MethodDeclarationSyntax m when m.Modifiers.Any(SyntaxKind.AsyncKeyword):
+                        return true;
+                    case LocalFunctionStatementSyntax lf when lf.Modifiers.Any(SyntaxKind.AsyncKeyword):
+                        return true;
+                    case ParenthesizedLambdaExpressionSyntax pl when pl.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword):
+                        return true;
+                    case SimpleLambdaExpressionSyntax sl when sl.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword):
+                        return true;
+                    case AnonymousMethodExpressionSyntax am when am.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword):
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        static bool IsNameofInvocation(InvocationExpressionSyntax inv)
+        {
+            if (inv.Expression is IdentifierNameSyntax id && id.Identifier.ValueText == "nameof")
+                return true;
+
+            if (inv.Expression is MemberAccessExpressionSyntax ma &&
+                ma.Name is IdentifierNameSyntax name &&
+                name.Identifier.ValueText == "nameof")
+                return true;
+
+            return false;
+        }
     }
 }

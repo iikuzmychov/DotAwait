@@ -1,29 +1,90 @@
 <Project>
 
   <PropertyGroup>
-    <DotAwaitDll>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)\bin\Debug\net8.0\DotAwait.dll'))</DotAwaitDll>
+    <DotAwaitTasksDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)\bin\$(Configuration)\netstandard2.0\'))</DotAwaitTasksDir>
+    <DotAwaitDll>$(DotAwaitTasksDir)DotAwait.dll</DotAwaitDll>
+
+    <!-- Rewritten sources live only in obj -->
+    <DotAwaitOut>$(IntermediateOutputPath)dotawait\src\</DotAwaitOut>
+
+    <!-- Make sure rewritten sources are never picked up by wildcards (esp. in design-time) -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(IntermediateOutputPath)dotawait\**\*.cs</DefaultItemExcludes>
+
+    <_DotAwaitOutLower>$([System.String]::Copy('$(DotAwaitOut)').ToLowerInvariant())</_DotAwaitOutLower>
+    <_BaseIntLower>$([System.String]::Copy('$(BaseIntermediateOutputPath)').ToLowerInvariant())</_BaseIntLower>
   </PropertyGroup>
 
-  <UsingTask TaskName="DotAwait.RewriteSourcesTask" AssemblyFile="$(DotAwaitDll)" Condition="Exists('$(DotAwaitDll)')" />
-  
-  <UsingTask
-    TaskName="DotAwait.RewriteSourcesTask"
-    AssemblyFile="$(OutputPath)DotAwait.dll"
-    Condition="Exists('$(OutputPath)DotAwait.dll')" />
+  <UsingTask TaskName="DotAwait.RewriteSourcesTask"
+             AssemblyFile="$(DotAwaitDll)"
+             Condition="Exists('$(DotAwaitDll)')" />
 
-  <UsingTask
-    TaskName="DotAwait.RewriteSourcesTask"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\lib\net8.0\DotAwait.dll"
-    Condition="Exists('$(MSBuildThisFileDirectory)..\lib\net8.0\DotAwait.dll')" />
+  <!-- Build-time only: do NOT affect IntelliSense / design-time compilation -->
+  <Target Name="DotAwait_Rewrite"
+          BeforeTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' != 'true' and Exists('$(DotAwaitDll)')">
 
-  <Target Name="DotAwait_PatchAfterBuild" AfterTargets="Build" Condition="'$(IsDotAwaitRewritingInProgress)' != 'true'">
-    
-    <Message Importance="High" Text="[DotAwait] $(DotAwaitDll)" />
-    <Message Importance="High" Text="[DotAwait] $(IsDotAwaitRewritingInProgress)" />
-    <Message Importance="High" Text="[DotAwait] $(MSBuildProjectFullPath)" />
+    <PropertyGroup>
+      <DotAwaitActive>true</DotAwaitActive>
+    </PropertyGroup>
 
-    <RewriteSourcesTask ProjectPath="$(MSBuildProjectFullPath)" OutputDirectory="$(OutputPath)" />
-    
+    <ItemGroup>
+      <_DotAwaitOriginalCompile Include="@(Compile)" />
+
+      <!-- Keep MSBuild-generated sources under obj (AssemblyInfo, AssemblyAttributes, etc.) -->
+      <_DotAwaitKeep Include="@(Compile)"
+        Condition="
+          $([System.String]::Copy('%(Compile.FullPath)').ToLowerInvariant().StartsWith('$(_BaseIntLower)'))
+          and ! $([System.String]::Copy('%(Compile.FullPath)').ToLowerInvariant().StartsWith('$(_DotAwaitOutLower)'))
+        " />
+
+      <!-- Rewrite everything else (user sources, linked sources, etc.) -->
+      <_DotAwaitToRewrite Include="@(Compile)"
+        Condition="
+          ! $([System.String]::Copy('%(Compile.FullPath)').ToLowerInvariant().StartsWith('$(_BaseIntLower)'))
+          and ! $([System.String]::Copy('%(Compile.FullPath)').ToLowerInvariant().StartsWith('$(_DotAwaitOutLower)'))
+        " />
+    </ItemGroup>
+
+    <RewriteSourcesTask
+        Sources="@(_DotAwaitToRewrite)"
+        ProjectDirectory="$(MSBuildProjectDirectory)"
+        OutputDirectory="$(DotAwaitOut)"
+        DefineConstants="$(DefineConstants)"
+        LangVersion="$(LangVersion)">
+      <Output TaskParameter="RewrittenSources" ItemName="_DotAwaitRewritten" />
+    </RewriteSourcesTask>
+
+    <!-- Construct the compile list for CoreCompile and dedupe by path -->
+    <ItemGroup>
+      <_DotAwaitFinal Include="@(_DotAwaitKeep->'%(FullPath)')" />
+      <_DotAwaitFinal Include="@(_DotAwaitRewritten->'%(FullPath)')" />
+    </ItemGroup>
+
+    <RemoveDuplicates Inputs="@(_DotAwaitFinal)">
+      <Output TaskParameter="Filtered" ItemName="_DotAwaitFinalDistinct" />
+    </RemoveDuplicates>
+
+    <ItemGroup>
+      <Compile Remove="@(Compile)" />
+      <Compile Include="@(_DotAwaitFinalDistinct)" />
+    </ItemGroup>
+
+  </Target>
+
+  <!-- Restore original Compile items right after compiler run -->
+  <Target Name="DotAwait_Restore"
+          AfterTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' == 'true' and Exists('$(DotAwaitDll)')">
+
+    <ItemGroup>
+      <Compile Remove="@(Compile)" />
+      <Compile Include="@(_DotAwaitOriginalCompile)" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <DotAwaitActive>false</DotAwaitActive>
+    </PropertyGroup>
+
   </Target>
 
 </Project>

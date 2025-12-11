@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DotAwait.ConsoleTest", "Dot
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DotAwait.NuGetPackageTest", "DotAwait.NuGetPackageTest\DotAwait.NuGetPackageTest.csproj", "{2F3CF32A-DA38-4F53-B6BD-50B8810F5093}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DotAwait.Core", "DotAwait.Core\DotAwait.Core.csproj", "{872DE7CE-7457-41D7-98E2-D74B74C7993E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +29,10 @@ Global
 		{2F3CF32A-DA38-4F53-B6BD-50B8810F5093}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F3CF32A-DA38-4F53-B6BD-50B8810F5093}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F3CF32A-DA38-4F53-B6BD-50B8810F5093}.Release|Any CPU.Build.0 = Release|Any CPU
+		{872DE7CE-7457-41D7-98E2-D74B74C7993E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{872DE7CE-7457-41D7-98E2-D74B74C7993E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{872DE7CE-7457-41D7-98E2-D74B74C7993E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{872DE7CE-7457-41D7-98E2-D74B74C7993E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
