@@ -1,8 +1,4 @@
-﻿using System.Diagnostics;
-using System.Text;
-
-Debugger.Launch();
-Debugger.Break();
+﻿using System.Text;
 
 Console.OutputEncoding = Encoding.UTF8;
 TestRunner.RunAsync().Await();

@@ -10,13 +10,13 @@ namespace DotAwait;
 
 public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 {
-    [Required] public ITaskItem[] Sources { get; set; } = Array.Empty<ITaskItem>();
-    [Required] public string ProjectDirectory { get; set; } = "";
-    [Required] public string OutputDirectory { get; set; } = "";
-    public string DefineConstants { get; set; } = "";
-    public string LangVersion { get; set; } = "latest";
+    [Required] public ITaskItem[] Sources { get; set; } = [];
+    [Required] public string ProjectDirectory { get; set; } = string.Empty;
+    [Required] public string OutputDirectory { get; set; } = string.Empty;
+    public string DefineConstants { get; set; } = string.Empty;
+    public string LangVersion { get; set; } = string.Empty;
 
-    [Output] public ITaskItem[] RewrittenSources { get; set; } = Array.Empty<ITaskItem>();
+    [Output] public ITaskItem[] RewrittenSources { get; set; } = [];
 
     public override bool Execute()
     {
@@ -29,22 +29,29 @@ public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 preprocessorSymbols: SplitConstants(DefineConstants));
 
             var rewritten = new List<ITaskItem>(Sources.Length);
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var unchanged = new List<ITaskItem>(Sources.Length);
 
             foreach (var src in Sources)
             {
                 var fullPath = src.GetMetadata("FullPath");
                 if (string.IsNullOrWhiteSpace(fullPath))
+                {
+                    unchanged.Add(src);
                     continue;
+                }   
 
                 fullPath = Path.GetFullPath(fullPath);
-                if (!seen.Add(fullPath))
-                    continue;
 
                 if (!fullPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    unchanged.Add(src);
                     continue;
+                }
                 if (!File.Exists(fullPath))
+                {
+                    unchanged.Add(src);
                     continue;
+                }
 
                 var outPath = MapOutputPath(fullPath, ProjectDirectory, OutputDirectory);
                 Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
@@ -66,7 +73,7 @@ public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 rewritten.Add(item);
             }
 
-            RewrittenSources = rewritten.ToArray();
+            RewrittenSources = [..rewritten, ..unchanged];
             return true;
         }
         catch (Exception ex)
@@ -161,10 +168,6 @@ public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
             if (!IsAwaitAllowedHere(node))
                 return node;
-
-            // await x.Await() -> await x
-            if (node.Parent is AwaitExpressionSyntax ae && ae.Expression == node)
-                return ma.Expression.WithTriviaFrom(node);
 
             // x.Await() -> await(x)  (avoids "awaitFoo" token gluing)
             var expr = ma.Expression.WithoutTrivia();
