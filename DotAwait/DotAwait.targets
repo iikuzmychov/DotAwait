@@ -43,6 +43,9 @@
           ! $([System.String]::Copy('%(Compile.FullPath)').ToLowerInvariant().StartsWith('$(_BaseIntLower)'))
           and ! $([System.String]::Copy('%(Compile.FullPath)').ToLowerInvariant().StartsWith('$(_DotAwaitOutLower)'))
         " />
+
+      <!-- Canonical resolved reference set used by CoreCompile/csc -->
+      <_DotAwaitReferencePath Include="@(ReferencePath)" />
     </ItemGroup>
 
     <RewriteSourcesTask
@@ -50,7 +53,8 @@
         ProjectDirectory="$(MSBuildProjectDirectory)"
         OutputDirectory="$(DotAwaitOut)"
         DefineConstants="$(DefineConstants)"
-        LangVersion="$(LangVersion)">
+        LangVersion="$(LangVersion)"
+        ReferencePaths="@(_DotAwaitReferencePath)">
       <Output TaskParameter="RewrittenSources" ItemName="_DotAwaitRewritten" />
     </RewriteSourcesTask>
 

@@ -2,19 +2,20 @@
 using Microsoft.Build.Utilities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace DotAwait;
 
-public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
+public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 {
     [Required] public ITaskItem[] Sources { get; set; } = [];
     [Required] public string ProjectDirectory { get; set; } = string.Empty;
     [Required] public string OutputDirectory { get; set; } = string.Empty;
-    public string DefineConstants { get; set; } = string.Empty;
-    public string LangVersion { get; set; } = string.Empty;
+    [Required] public string DefineConstants { get; set; } = string.Empty;
+    [Required] public string LangVersion { get; set; } = string.Empty;
+
+    [Required] public ITaskItem[] ReferencePaths { get; set; } = [];
 
     [Output] public ITaskItem[] RewrittenSources { get; set; } = [];
 
@@ -28,8 +29,14 @@ public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 ParseLangVersion(LangVersion),
                 preprocessorSymbols: SplitConstants(DefineConstants));
 
+            var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary);
+            var metadataReferences = CreateMetadataReferences(ReferencePaths);
+
             var rewritten = new List<ITaskItem>(Sources.Length);
             var unchanged = new List<ITaskItem>(Sources.Length);
+
+            var trees = new List<SyntaxTree>();
+            var treeToSource = new Dictionary<SyntaxTree, (ITaskItem Source, string FullPath, string OutputPath)>();
 
             foreach (var src in Sources)
             {
@@ -38,7 +45,7 @@ public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 {
                     unchanged.Add(src);
                     continue;
-                }   
+                }
 
                 fullPath = Path.GetFullPath(fullPath);
 
@@ -47,6 +54,7 @@ public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                     unchanged.Add(src);
                     continue;
                 }
+
                 if (!File.Exists(fullPath))
                 {
                     unchanged.Add(src);
@@ -57,10 +65,31 @@ public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
 
                 var original = File.ReadAllText(fullPath, Encoding.UTF8);
-
                 var tree = CSharpSyntaxTree.ParseText(original, parseOptions, path: fullPath);
+
+                trees.Add(tree);
+                treeToSource[tree] = (src, fullPath, outPath);
+            }
+
+            if (trees.Count == 0)
+            {
+                RewrittenSources = [..rewritten, ..unchanged];
+                return true;
+            }
+
+            var compilation = CSharpCompilation.Create(
+                assemblyName: null,
+                syntaxTrees: trees,
+                references: metadataReferences,
+                options: compilationOptions);
+
+            foreach (var tree in trees)
+            {
+                var (src, fullPath, outPath) = treeToSource[tree];
+
+                var semanticModel = compilation.GetSemanticModel(tree);
                 var root = tree.GetRoot();
-                var newRoot = new AwaitRewriter().Visit(root);
+                var newRoot = new AwaitRewriter(semanticModel).Visit(root);
 
                 var rewrittenText = newRoot.ToFullString();
 
@@ -81,6 +110,29 @@ public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
             Log.LogErrorFromException(ex, showStackTrace: true);
             return false;
         }
+    }
+
+    static IReadOnlyList<MetadataReference> CreateMetadataReferences(ITaskItem[] referencePaths)
+    {
+        var references = new List<MetadataReference>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in referencePaths ?? Array.Empty<ITaskItem>())
+        {
+            var path = item.GetMetadata("FullPath");
+            if (string.IsNullOrWhiteSpace(path))
+                path = item.ItemSpec;
+
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path) || !seen.Add(path))
+                continue;
+
+            references.Add(MetadataReference.CreateFromFile(path));
+        }
+
+        if (references.Count == 0)
+            throw new InvalidOperationException("No metadata references were provided (ReferencePaths is empty). Ensure DotAwait.targets passes @(ReferencePath) to the task.");
+
+        return references;
     }
 
     static string[] SplitConstants(string s)
@@ -151,72 +203,5 @@ public sealed class RewriteSourcesTask : Microsoft.Build.Utilities.Task
             c[i++] = (char)(lo < 10 ? '0' + lo : 'A' + (lo - 10));
         }
         return new string(c);
-    }
-
-    sealed class AwaitRewriter : CSharpSyntaxRewriter
-    {
-        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
-        {
-            node = (InvocationExpressionSyntax)base.VisitInvocationExpression(node)!;
-
-            if (node.ArgumentList.Arguments.Count != 0)
-                return node;
-            if (node.Expression is not MemberAccessExpressionSyntax ma)
-                return node;
-            if (ma.Name is not IdentifierNameSyntax id || id.Identifier.ValueText != "Await")
-                return node;
-
-            if (!IsAwaitAllowedHere(node))
-                return node;
-
-            // x.Await() -> await(x)  (avoids "awaitFoo" token gluing)
-            var expr = ma.Expression.WithoutTrivia();
-            var operand = expr is ParenthesizedExpressionSyntax ? expr : SyntaxFactory.ParenthesizedExpression(expr);
-            return SyntaxFactory.AwaitExpression(operand).WithTriviaFrom(node);
-        }
-
-        static bool IsAwaitAllowedHere(SyntaxNode node)
-        {
-            if (node.Ancestors().Any(a => a is AttributeSyntax))
-                return false;
-
-            if (node.Ancestors().OfType<InvocationExpressionSyntax>().Any(IsNameofInvocation))
-                return false;
-
-            if (node.Ancestors().OfType<GlobalStatementSyntax>().Any())
-                return true;
-
-            foreach (var a in node.Ancestors())
-            {
-                switch (a)
-                {
-                    case MethodDeclarationSyntax m when m.Modifiers.Any(SyntaxKind.AsyncKeyword):
-                        return true;
-                    case LocalFunctionStatementSyntax lf when lf.Modifiers.Any(SyntaxKind.AsyncKeyword):
-                        return true;
-                    case ParenthesizedLambdaExpressionSyntax pl when pl.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword):
-                        return true;
-                    case SimpleLambdaExpressionSyntax sl when sl.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword):
-                        return true;
-                    case AnonymousMethodExpressionSyntax am when am.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword):
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        static bool IsNameofInvocation(InvocationExpressionSyntax inv)
-        {
-            if (inv.Expression is IdentifierNameSyntax id && id.Identifier.ValueText == "nameof")
-                return true;
-
-            if (inv.Expression is MemberAccessExpressionSyntax ma &&
-                ma.Name is IdentifierNameSyntax name &&
-                name.Identifier.ValueText == "nameof")
-                return true;
-
-            return false;
-        }
     }
 }

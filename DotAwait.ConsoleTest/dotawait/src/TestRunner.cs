@@ -1,6 +1,4 @@
 ﻿#line 1 "C:\Users\i.kuzmychov\Code\Personal\DotAwait\DotAwait.ConsoleTest\TestRunner.cs"
-using System.Diagnostics;
-
 static class TestRunner
 {
     private async static Task<int> Get5Async()
@@ -32,8 +30,6 @@ static class TestRunner
         Console.WriteLine("# DotAsync");
 
         Console.WriteLine();
-
-        //Debugger.Break();
 
         Console.WriteLine($"| Test 1: start, Thread: {Environment.CurrentManagedThreadId}");
         var asyncTest1 = await(Get5Async());
