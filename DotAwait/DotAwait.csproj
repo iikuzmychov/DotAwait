@@ -10,8 +10,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="DotAwait.props" Pack="true" PackagePath="buildTransitive\DotAwait.props" />
-    <None Include="DotAwait.targets" Pack="true" PackagePath="buildTransitive\DotAwait.targets" />
+    <Compile Remove="build\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="build\**\*." Pack="true" PackagePath="buildTransitive\" />
+    <None Include="build\**\*.cs" Visible="True" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,9 @@
+<Project>
+  <ItemGroup>
+    <Using Include="DotAwait" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)injected\**\*.cs" Visible="False" />
+  </ItemGroup>
+</Project>

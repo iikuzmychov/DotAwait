@@ -2,6 +2,8 @@
 using Microsoft.Build.Utilities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace DotAwait;
@@ -13,7 +15,6 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
     [Required] public string OutputDirectory { get; set; } = string.Empty;
     [Required] public string DefineConstants { get; set; } = string.Empty;
     [Required] public string LangVersion { get; set; } = string.Empty;
-
     [Required] public ITaskItem[] ReferencePaths { get; set; } = [];
 
     [Output] public ITaskItem[] RewrittenSources { get; set; } = [];
@@ -36,6 +37,7 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
             var trees = new List<SyntaxTree>();
             var treeToSource = new Dictionary<SyntaxTree, (ITaskItem Source, string FullPath, string OutputPath)>();
+
 
             foreach (var src in Sources)
             {
@@ -151,7 +153,7 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
         var references = new List<MetadataReference>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in referencePaths ?? Array.Empty<ITaskItem>())
+        foreach (var item in referencePaths)
         {
             var path = item.GetMetadata("FullPath");
             if (string.IsNullOrWhiteSpace(path))
@@ -162,9 +164,6 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
             references.Add(MetadataReference.CreateFromFile(path));
         }
-
-        if (references.Count == 0)
-            throw new InvalidOperationException("No metadata references were provided (ReferencePaths is empty). Ensure DotAwait.targets passes @(ReferencePath) to the task.");
 
         return references;
     }
@@ -190,16 +189,26 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
     static string MapOutputPath(string file, string projectDir, string outDir)
     {
         var full = Path.GetFullPath(file);
-        var root = Path.GetFullPath(projectDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var hash = GetStablePathHash(full);
 
-        if (full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-        {
-            var rel = full.Substring((root + Path.DirectorySeparatorChar).Length);
-            return Path.Combine(outDir, rel);
-        }
+        var name = Path.GetFileNameWithoutExtension(full);
+        var ext = Path.GetExtension(full);
 
-        // External/linked files are not supported.
-        throw new InvalidOperationException("Source file is outside the project directory: " + full);
+        return Path.Combine(outDir, name + "_" + hash + ext);
+    }
+
+    static string GetStablePathHash(string fullPath)
+    {
+        var bytes = Encoding.UTF8.GetBytes(fullPath);
+
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(bytes);
+
+        var sb = new StringBuilder(hash.Length * 2);
+        foreach (var b in hash)
+            sb.Append(b.ToString("x2"));
+
+        return sb.ToString();
     }
 
     void LogAwaitUnresolved(AwaitRewriter.AwaitRewriteEvent e)

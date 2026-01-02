@@ -1,4 +1,4 @@
 <Solution>
   <Project Path="DotAwait.ConsoleTest/DotAwait.ConsoleTest.csproj" />
-  <Project Path="DotAwait.Build/DotAwait.Build.csproj" />
+  <Project Path="DotAwait/DotAwait.csproj" />
 </Solution>

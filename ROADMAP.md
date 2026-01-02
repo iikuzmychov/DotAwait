@@ -74,10 +74,6 @@ Work:
 - Decide whether to keep this default as-is.
 - If configurability is needed, allow overriding `DotAwaitOut` / `DotAwaitIntermediateDir` via MSBuild properties.
 
-### 5) Chore / cleanup
+### 5) Logging / diagnostics
 
-General code and repo maintenance:
-- Improve naming/visibility consistency (style guide aligned).
-- Tighten diagnostics and error messages.
-- Reduce duplication in MSBuild task + targets.
-- Add baseline documentation (README, usage, limitations) if desired.
+Improve logging and diagnostics for the build rewrite step.
