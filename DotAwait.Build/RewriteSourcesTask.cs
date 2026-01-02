@@ -2,7 +2,6 @@
 using Microsoft.Build.Utilities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace DotAwait;
@@ -83,13 +82,36 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 references: metadataReferences,
                 options: compilationOptions);
 
+            var totalRewritten = 0;
+            var totalSkippedNotOurs = 0;
+            var totalUnresolved = 0;
+
             foreach (var tree in trees)
             {
                 var (src, fullPath, outPath) = treeToSource[tree];
 
                 var semanticModel = compilation.GetSemanticModel(tree);
                 var root = tree.GetRoot();
-                var newRoot = new AwaitRewriter(semanticModel).Visit(root);
+
+                var rewriter = new AwaitRewriter(semanticModel);
+                var newRoot = rewriter.Visit(root);
+
+                foreach (var e in rewriter.Events)
+                {
+                    switch (e.Kind)
+                    {
+                        case AwaitRewriter.AwaitRewriteKind.Rewritten:
+                            totalRewritten++;
+                            break;
+                        case AwaitRewriter.AwaitRewriteKind.SkippedNotOurs:
+                            totalSkippedNotOurs++;
+                            break;
+                        case AwaitRewriter.AwaitRewriteKind.Unresolved:
+                            totalUnresolved++;
+                            LogAwaitUnresolved(e);
+                            break;
+                    }
+                }
 
                 var rewrittenText = newRoot.ToFullString();
 
@@ -101,6 +123,11 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 src.CopyMetadataTo(item);
                 rewritten.Add(item);
             }
+
+            Log.LogMessage(MessageImportance.Low, $"DotAwait: Await() rewritten={totalRewritten}, skipped(not ours)={totalSkippedNotOurs}, unresolved={totalUnresolved}.");
+
+            if (totalUnresolved != 0)
+                return false;
 
             RewrittenSources = [..rewritten, ..unchanged];
             return true;
@@ -160,48 +187,32 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
         if (full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {
-            var rel = GetRelativePathNs20(root, full);
+            var rel = full.Substring((root + Path.DirectorySeparatorChar).Length);
             return Path.Combine(outDir, rel);
         }
 
-        var name = Hex(Sha256(Encoding.UTF8.GetBytes(full))).Substring(0, 16);
-        return Path.Combine(outDir, "_external", name, Path.GetFileName(full));
+        // External/linked files are not supported.
+        throw new InvalidOperationException("Source file is outside the project directory: " + full);
     }
 
-    static string GetRelativePathNs20(string baseDir, string fullPath)
+    void LogAwaitUnresolved(AwaitRewriter.AwaitRewriteEvent e)
     {
-        baseDir = Path.GetFullPath(baseDir);
-        fullPath = Path.GetFullPath(fullPath);
+        var span = e.Location.GetLineSpan();
+        var file = span.Path;
+        var start = span.StartLinePosition;
+        var end = span.EndLinePosition;
 
-        if (!baseDir.EndsWith(Path.DirectorySeparatorChar.ToString()))
-            baseDir += Path.DirectorySeparatorChar;
+        var method = string.IsNullOrWhiteSpace(e.DisplaySymbol) ? "<unbound>" : e.DisplaySymbol;
 
-        var baseUri = new Uri(baseDir, UriKind.Absolute);
-        var fullUri = new Uri(fullPath, UriKind.Absolute);
-
-        var relUri = baseUri.MakeRelativeUri(fullUri);
-        var rel = Uri.UnescapeDataString(relUri.ToString());
-
-        return rel.Replace('/', Path.DirectorySeparatorChar);
-    }
-
-    static byte[] Sha256(byte[] data)
-    {
-        using (var sha = SHA256.Create())
-            return sha.ComputeHash(data);
-    }
-
-    static string Hex(byte[] bytes)
-    {
-        var c = new char[bytes.Length * 2];
-        var i = 0;
-        foreach (var b in bytes)
-        {
-            var hi = (b >> 4) & 0xF;
-            var lo = b & 0xF;
-            c[i++] = (char)(hi < 10 ? '0' + hi : 'A' + (hi - 10));
-            c[i++] = (char)(lo < 10 ? '0' + lo : 'A' + (lo - 10));
-        }
-        return new string(c);
+        Log.LogError(
+            subcategory: "DotAwait",
+            errorCode: "DOTAWAIT001",
+            helpKeyword: null,
+            file: file,
+            lineNumber: start.Line + 1,
+            columnNumber: start.Character + 1,
+            endLineNumber: end.Line + 1,
+            endColumnNumber: end.Character + 1,
+            message: "Unable to resolve '.Await()' call for rewriting. This build would miss a DotAwait rewrite. Resolved symbol: " + method);
     }
 }

@@ -6,8 +6,32 @@ namespace DotAwait;
 
 public sealed class AwaitRewriter : CSharpSyntaxRewriter
 {
+    public enum AwaitRewriteKind
+    {
+        Rewritten,
+        SkippedNotOurs,
+        Unresolved
+    }
+
+    public readonly struct AwaitRewriteEvent
+    {
+        public AwaitRewriteEvent(AwaitRewriteKind kind, Location location, string? displaySymbol)
+        {
+            Kind = kind;
+            Location = location;
+            DisplaySymbol = displaySymbol;
+        }
+
+        public AwaitRewriteKind Kind { get; }
+        public Location Location { get; }
+        public string? DisplaySymbol { get; }
+    }
+
     readonly SemanticModel _semanticModel;
     readonly INamedTypeSymbol? _awaitExtensionsType;
+
+    readonly List<AwaitRewriteEvent> _events = new();
+    public IReadOnlyList<AwaitRewriteEvent> Events => _events;
 
     public AwaitRewriter(SemanticModel semanticModel)
     {
@@ -25,33 +49,54 @@ public sealed class AwaitRewriter : CSharpSyntaxRewriter
             return node;
         }
 
+        // todo: this check should result in smth like AwaitRewriteKind.InvalidNonAsyncContext
         if (!IsAwaitAllowedHere(node))
             return node;
 
-        if (!IsAwaitExtensionInvocation(node))
-            return node;
+        var classification = ClassifyAwaitInvocation(node, out var method);
+        switch (classification)
+        {
+            case AwaitRewriteKind.Rewritten:
+            {
+                _events.Add(new AwaitRewriteEvent(AwaitRewriteKind.Rewritten, node.GetLocation(), method?.ToDisplayString()));
 
-        // x.Await() -> await(x)  (avoids "awaitFoo" token gluing)
-        var expr = ma.Expression.WithoutTrivia();
-        var operand = expr is ParenthesizedExpressionSyntax ? expr : SyntaxFactory.ParenthesizedExpression(expr);
-        return SyntaxFactory.AwaitExpression(operand).WithTriviaFrom(node);
+                // x.Await() -> await(x)  (avoids "awaitFoo" token gluing)
+                var expr = ma.Expression.WithoutTrivia();
+                var operand = expr is ParenthesizedExpressionSyntax ? expr : SyntaxFactory.ParenthesizedExpression(expr);
+                return SyntaxFactory.AwaitExpression(operand).WithTriviaFrom(node);
+            }
+            case AwaitRewriteKind.SkippedNotOurs:
+                _events.Add(new AwaitRewriteEvent(AwaitRewriteKind.SkippedNotOurs, node.GetLocation(), method?.ToDisplayString()));
+                return node;
+            case AwaitRewriteKind.Unresolved:
+                _events.Add(new AwaitRewriteEvent(AwaitRewriteKind.Unresolved, node.GetLocation(), method?.ToDisplayString()));
+                return node;
+            default:
+                return node;
+        }
     }
 
-    bool IsAwaitExtensionInvocation(InvocationExpressionSyntax node)
+    AwaitRewriteKind ClassifyAwaitInvocation(InvocationExpressionSyntax node, out IMethodSymbol? method)
     {
+        method = null;
+
         if (_awaitExtensionsType is null)
-            return false;
+            return AwaitRewriteKind.Unresolved;
 
         var symbolInfo = _semanticModel.GetSymbolInfo(node);
         var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
-        if (symbol is not IMethodSymbol method)
-            return false;
+        if (symbol is not IMethodSymbol m)
+            return AwaitRewriteKind.Unresolved;
 
-        var target = method.ReducedFrom ?? method;
+        method = m;
+
+        var target = m.ReducedFrom ?? m;
         if (!target.IsExtensionMethod)
-            return false;
+            return AwaitRewriteKind.SkippedNotOurs;
 
-        return SymbolEqualityComparer.Default.Equals(target.ContainingType, _awaitExtensionsType);
+        return SymbolEqualityComparer.Default.Equals(target.ContainingType, _awaitExtensionsType)
+            ? AwaitRewriteKind.Rewritten
+            : AwaitRewriteKind.SkippedNotOurs;
     }
 
     static bool IsAwaitAllowedHere(SyntaxNode node)

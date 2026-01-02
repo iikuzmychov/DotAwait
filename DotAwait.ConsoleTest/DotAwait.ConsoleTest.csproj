@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="..\DotAwait\DotAwait.props" />
-  <Import Project="..\DotAwait\DotAwait.targets" />
+  <Import Project="..\DotAwait.Build\DotAwait.props" />
+  <Import Project="..\DotAwait.Build\DotAwait.targets" />
   
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -12,7 +12,7 @@
   </PropertyGroup>
   
   <ItemGroup>
-    <ProjectReference Include="..\DotAwait\DotAwait.csproj" />
+    <ProjectReference Include="..\DotAwait.Build\DotAwait.Build.csproj" />
   </ItemGroup>
 
 </Project>
