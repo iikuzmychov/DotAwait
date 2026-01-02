@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <DotAwaitTasksDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)\bin\$(Configuration)\netstandard2.0\'))</DotAwaitTasksDir>
-    <DotAwaitDll>$(DotAwaitTasksDir)DotAwait.dll</DotAwaitDll>
+    <DotAwaitDll>$(DotAwaitTasksDir)DotAwait.Build.dll</DotAwaitDll>
 
     <!-- Rewritten sources live only in obj -->
     <DotAwaitOut>$(IntermediateOutputPath)dotawait\src\</DotAwaitOut>
