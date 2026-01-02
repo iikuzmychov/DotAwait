@@ -16,7 +16,8 @@
 
   <UsingTask TaskName="DotAwait.RewriteSourcesTask"
              AssemblyFile="$(DotAwaitDll)"
-             Condition="Exists('$(DotAwaitDll)')" />
+             Condition="Exists('$(DotAwaitDll)')"
+             TaskFactory="TaskHostFactory" />
 
   <!-- Build-time only: do NOT affect IntelliSense / design-time compilation -->
   <Target Name="DotAwait_Rewrite"

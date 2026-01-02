@@ -94,12 +94,9 @@ Work:
 
 ### 7) MSBuild output lock after debugging
 
-Fix the case where, after debugging and then rebuilding, the build outputs for `DotAwait.Build` are locked (cannot be overwritten/deleted).
+Status: resolved.
 
-Work:
-- Reproduce reliably.
-- Identify which process holds the lock.
-- Adjust build/targets workflow to avoid the lock or to recover from it (e.g., ensure the task assembly is not loaded from the project output path during the consuming build).
+(Implementation details not recorded here.)
 
 ### 8) Chore / cleanup
 
