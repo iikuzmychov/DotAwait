@@ -18,14 +18,7 @@ This repository implements **DotAwait**: a way to write `await` in a LINQ / flue
 
 ## What should be done next
 
-### 1) Add an explicit kind for non-async context (and fail the build)
-
-Status: implemented.
-
-- `DotAwait.Build\AwaitRewriter.cs` now classifies `DotAwait.TaskExtensions.Await()` usage outside an async-allowed context as `AwaitRewriteKind.InvalidNonAsyncContext`.
-- `DotAwait.Build\RewriteSourcesTask.cs` logs a build error `DOTAWAIT002` for this case and fails the build.
-
-### 2) Automated tests (high priority)
+### 1) Automated tests (high priority)
 
 Add automated tests that validate the build task and targets end-to-end.
 
@@ -39,7 +32,7 @@ Scope:
   - `Rewritten`
   - `SkippedNotOurs`
   - `Unresolved` (should fail build with `DOTAWAIT001`, per `RewriteSourcesTask.cs`)
-  - new non-async-context kind (should fail build)
+  - `InvalidNonAsyncContext` (should fail build with `DOTAWAIT002`, per `RewriteSourcesTask.cs`)
 - Test case matrix:
   - `Task`, `Task<T>`, `ValueTask`, `ValueTask<T>`
   - chained member access / fluent calls
@@ -47,7 +40,7 @@ Scope:
   - global statements (top-level program)
   - `nameof(...)` and attribute contexts (must not rewrite)
 
-### 3) Trivia / debugging experience
+### 2) Trivia / debugging experience
 
 Verify trivia and source mapping quality for rewritten awaits.
 
@@ -56,18 +49,7 @@ Work:
 - Verify rewritten output preserves trivia in a predictable way.
 - Verify `#line` mapping results in diagnostics pointing to original files.
 
-### 4) Clean / Rebuild integration
-
-Verify DotAwait behaves correctly when the user cleans the solution/project:
-
-- `dotnet clean`
-- Visual Studio: **Build** > **Clean Solution** / **Clean**
-
-Work:
-- Confirm what happens to `$(IntermediateOutputPath)dotawait\` after a clean.
-- If it is not removed by default, add an MSBuild target hooked into `Clean` to delete `$(IntermediateOutputPath)dotawait\`.
-
-### 5) Preprocessing performance
+### 3) Preprocessing performance
 
 Investigate and improve performance of the build-time rewriting.
 
@@ -83,22 +65,16 @@ Work:
   - Consider per-file semantic model reuse strategies, or reducing the compilation inputs if possible.
 - Run with a representative project and record baseline timings before/after changes.
 
-### 6) Intermediate output location
+### 4) Intermediate output location
 
 Current behavior (from code/targets):
-- Rewritten sources are emitted under `$(IntermediateOutputPath)dotawait\src\` (`DotAwaitOut`).
+- Rewritten sources are emitted under `$(DotAwaitIntermediateDir)src\`.
 
 Work:
 - Decide whether to keep this default as-is.
-- If configurability is needed, allow overriding `DotAwaitOut` via MSBuild property.
+- If configurability is needed, allow overriding `DotAwaitOut` / `DotAwaitIntermediateDir` via MSBuild properties.
 
-### 7) MSBuild output lock after debugging
-
-Status: resolved.
-
-(Implementation details not recorded here.)
-
-### 8) Chore / cleanup
+### 5) Chore / cleanup
 
 General code and repo maintenance:
 - Improve naming/visibility consistency (style guide aligned).
