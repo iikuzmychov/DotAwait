@@ -2,5 +2,11 @@
 using System.Text;
 
 Console.OutputEncoding = Encoding.UTF8;
+
 await(TestRunner.RunAsync());
+
+Console.WriteLine();
+var lazyResult = await(new Lazy<int>(() => 5 + 5));
+Console.WriteLine($"Lazy result: {lazyResult}");
+
 #line default

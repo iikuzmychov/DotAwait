@@ -5,29 +5,20 @@
     <DotAwaitDll>$(DotAwaitTasksDir)DotAwait.dll</DotAwaitDll>
     <DotAwaitIntermediateDir>$(IntermediateOutputPath)dotawait\</DotAwaitIntermediateDir>
     <DotAwaitOut>$(DotAwaitIntermediateDir)src\</DotAwaitOut>
-
-    <!-- Make sure rewritten sources are never picked up by wildcards (esp. in design-time) -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);$(DotAwaitIntermediateDir)**\*.cs</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(DotAwaitIntermediateDir)**</DefaultItemExcludes>
   </PropertyGroup>
 
-  <UsingTask TaskName="DotAwait.RewriteSourcesTask"
-             AssemblyFile="$(DotAwaitDll)"
-             Condition="Exists('$(DotAwaitDll)')"
-             TaskFactory="TaskHostFactory" />
+  <UsingTask TaskName="DotAwait.RewriteSourcesTask" AssemblyFile="$(DotAwaitDll)" TaskFactory="TaskHostFactory" />
 
   <!-- Delete DotAwait intermediate outputs on Clean (Project > Clean / dotnet clean) -->
-  <Target Name="DotAwait_Clean"
-          AfterTargets="Clean"
-          Condition="Exists('$(DotAwaitIntermediateDir)')">
-
+  <Target Name="DotAwait_Clean" AfterTargets="Clean" Condition="Exists('$(DotAwaitIntermediateDir)')">
     <RemoveDir Directories="$(DotAwaitIntermediateDir)" />
-
   </Target>
 
   <!-- Build-time only: do NOT affect IntelliSense / design-time compilation -->
   <Target Name="DotAwait_Rewrite"
           BeforeTargets="CoreCompile"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' != 'true' and Exists('$(DotAwaitDll)')">
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' != 'true'">
 
     <PropertyGroup>
       <DotAwaitActive>true</DotAwaitActive>
@@ -48,19 +39,9 @@
       <Output TaskParameter="RewrittenSources" ItemName="_DotAwaitRewritten" />
     </RewriteSourcesTask>
 
-    <!-- Construct the compile list for CoreCompile and dedupe by path -->
-    <ItemGroup>
-      <_DotAwaitFinal Include="@(_DotAwaitKeep->'%(FullPath)')" />
-      <_DotAwaitFinal Include="@(_DotAwaitRewritten->'%(FullPath)')" />
-    </ItemGroup>
-
-    <RemoveDuplicates Inputs="@(_DotAwaitFinal)">
-      <Output TaskParameter="Filtered" ItemName="_DotAwaitFinalDistinct" />
-    </RemoveDuplicates>
-
     <ItemGroup>
       <Compile Remove="@(Compile)" />
-      <Compile Include="@(_DotAwaitFinalDistinct)" />
+      <Compile Include="@(_DotAwaitRewritten)" />
     </ItemGroup>
 
   </Target>
@@ -68,7 +49,7 @@
   <!-- Restore original Compile items right after compiler run -->
   <Target Name="DotAwait_Restore"
           AfterTargets="CoreCompile"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' == 'true' and Exists('$(DotAwaitDll)')">
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' == 'true'">
 
     <ItemGroup>
       <Compile Remove="@(Compile)" />

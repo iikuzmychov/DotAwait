@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DotAwait.ConsoleTest")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+acda36d6754b8715c60496d167a102d50abca21e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+15e4936119b38ebb8ae475aefb79ad26241fa7ad")]
 [assembly: System.Reflection.AssemblyProductAttribute("DotAwait.ConsoleTest")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DotAwait.ConsoleTest")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

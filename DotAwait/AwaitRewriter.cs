@@ -37,7 +37,7 @@ public sealed class AwaitRewriter : CSharpSyntaxRewriter
     public AwaitRewriter(SemanticModel semanticModel)
     {
         _semanticModel = semanticModel ?? throw new ArgumentNullException(nameof(semanticModel));
-        _awaitExtensionsType = semanticModel.Compilation.GetTypeByMetadataName("DotAwait.TaskExtensions");
+        _awaitExtensionsType = semanticModel.Compilation.GetTypeByMetadataName("DotAwait.DotAwaitTaskExtensions");
     }
 
     public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
@@ -135,12 +135,12 @@ public sealed class AwaitRewriter : CSharpSyntaxRewriter
 
     static bool IsNameofInvocation(InvocationExpressionSyntax inv)
     {
-        if (inv.Expression is IdentifierNameSyntax id && id.Identifier.ValueText == "nameof")
+        if (inv.Expression is IdentifierNameSyntax id && id.Identifier.IsKind(SyntaxKind.NameOfKeyword))
             return true;
 
         if (inv.Expression is MemberAccessExpressionSyntax ma &&
             ma.Name is IdentifierNameSyntax name &&
-            name.Identifier.ValueText == "nameof")
+            name.Identifier.IsKind(SyntaxKind.NameOfKeyword))
             return true;
 
         return false;
