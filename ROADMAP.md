@@ -98,7 +98,16 @@ Work:
 - Decide whether to keep this default as-is.
 - If configurability is needed, allow overriding `DotAwaitOut` via MSBuild property.
 
-### 7) Chore / cleanup
+### 7) MSBuild output lock after debugging
+
+Fix the case where, after debugging and then rebuilding, the build outputs for `DotAwait.Build` are locked (cannot be overwritten/deleted).
+
+Work:
+- Reproduce reliably.
+- Identify which process holds the lock.
+- Adjust build/targets workflow to avoid the lock or to recover from it (e.g., ensure the task assembly is not loaded from the project output path during the consuming build).
+
+### 8) Chore / cleanup
 
 General code and repo maintenance:
 - Improve naming/visibility consistency (style guide aligned).
