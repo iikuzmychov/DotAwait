@@ -10,6 +10,7 @@ public sealed class AwaitRewriter : CSharpSyntaxRewriter
     {
         Rewritten,
         SkippedNotOurs,
+        InvalidNonAsyncContext,
         Unresolved
     }
 
@@ -49,10 +50,6 @@ public sealed class AwaitRewriter : CSharpSyntaxRewriter
             return node;
         }
 
-        // todo: this check should result in smth like AwaitRewriteKind.InvalidNonAsyncContext
-        if (!IsAwaitAllowedHere(node))
-            return node;
-
         var classification = ClassifyAwaitInvocation(node, out var method);
         switch (classification)
         {
@@ -67,6 +64,9 @@ public sealed class AwaitRewriter : CSharpSyntaxRewriter
             }
             case AwaitRewriteKind.SkippedNotOurs:
                 _events.Add(new AwaitRewriteEvent(AwaitRewriteKind.SkippedNotOurs, node.GetLocation(), method?.ToDisplayString()));
+                return node;
+            case AwaitRewriteKind.InvalidNonAsyncContext:
+                _events.Add(new AwaitRewriteEvent(AwaitRewriteKind.InvalidNonAsyncContext, node.GetLocation(), method?.ToDisplayString()));
                 return node;
             case AwaitRewriteKind.Unresolved:
                 _events.Add(new AwaitRewriteEvent(AwaitRewriteKind.Unresolved, node.GetLocation(), method?.ToDisplayString()));
@@ -94,9 +94,12 @@ public sealed class AwaitRewriter : CSharpSyntaxRewriter
         if (!target.IsExtensionMethod)
             return AwaitRewriteKind.SkippedNotOurs;
 
-        return SymbolEqualityComparer.Default.Equals(target.ContainingType, _awaitExtensionsType)
+        if (!SymbolEqualityComparer.Default.Equals(target.ContainingType, _awaitExtensionsType))
+            return AwaitRewriteKind.SkippedNotOurs;
+
+        return IsAwaitAllowedHere(node)
             ? AwaitRewriteKind.Rewritten
-            : AwaitRewriteKind.SkippedNotOurs;
+            : AwaitRewriteKind.InvalidNonAsyncContext;
     }
 
     static bool IsAwaitAllowedHere(SyntaxNode node)

@@ -20,16 +20,10 @@ This repository implements **DotAwait**: a way to write `await` in a LINQ / flue
 
 ### 1) Add an explicit kind for non-async context (and fail the build)
 
-Resolve the TODO in `DotAwait.Build\AwaitRewriter.cs`.
+Status: implemented.
 
-Current behavior (from code):
-- The rewriter checks `IsAwaitAllowedHere(...)` and returns the original node when the call is not in an async-allowed context.
-- This path does not currently record an event or produce a diagnostic.
-
-Change:
-- Add a new `AwaitRewriteKind` value for this case (name TBD).
-- Record an event for this case.
-- Fail the build with a dedicated diagnostic code (error).
+- `DotAwait.Build\AwaitRewriter.cs` now classifies `DotAwait.TaskExtensions.Await()` usage outside an async-allowed context as `AwaitRewriteKind.InvalidNonAsyncContext`.
+- `DotAwait.Build\RewriteSourcesTask.cs` logs a build error `DOTAWAIT002` for this case and fails the build.
 
 ### 2) Automated tests (high priority)
 

@@ -84,6 +84,7 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
             var totalRewritten = 0;
             var totalSkippedNotOurs = 0;
+            var totalInvalidNonAsyncContext = 0;
             var totalUnresolved = 0;
 
             foreach (var tree in trees)
@@ -106,6 +107,10 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                         case AwaitRewriter.AwaitRewriteKind.SkippedNotOurs:
                             totalSkippedNotOurs++;
                             break;
+                        case AwaitRewriter.AwaitRewriteKind.InvalidNonAsyncContext:
+                            totalInvalidNonAsyncContext++;
+                            LogAwaitInvalidNonAsyncContext(e);
+                            break;
                         case AwaitRewriter.AwaitRewriteKind.Unresolved:
                             totalUnresolved++;
                             LogAwaitUnresolved(e);
@@ -124,9 +129,11 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 rewritten.Add(item);
             }
 
-            Log.LogMessage(MessageImportance.Low, $"DotAwait: Await() rewritten={totalRewritten}, skipped(not ours)={totalSkippedNotOurs}, unresolved={totalUnresolved}.");
+            Log.LogMessage(
+                MessageImportance.Low,
+                $"DotAwait: Await() rewritten={totalRewritten}, skipped(not ours)={totalSkippedNotOurs}, invalid(non-async)={totalInvalidNonAsyncContext}, unresolved={totalUnresolved}.");
 
-            if (totalUnresolved != 0)
+            if (totalUnresolved != 0 || totalInvalidNonAsyncContext != 0)
                 return false;
 
             RewrittenSources = [..rewritten, ..unchanged];
@@ -214,5 +221,26 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
             endLineNumber: end.Line + 1,
             endColumnNumber: end.Character + 1,
             message: "Unable to resolve '.Await()' call for rewriting. This build would miss a DotAwait rewrite. Resolved symbol: " + method);
+    }
+
+    void LogAwaitInvalidNonAsyncContext(AwaitRewriter.AwaitRewriteEvent e)
+    {
+        var span = e.Location.GetLineSpan();
+        var file = span.Path;
+        var start = span.StartLinePosition;
+        var end = span.EndLinePosition;
+
+        var method = string.IsNullOrWhiteSpace(e.DisplaySymbol) ? "<unbound>" : e.DisplaySymbol;
+
+        Log.LogError(
+            subcategory: "DotAwait",
+            errorCode: "DOTAWAIT002",
+            helpKeyword: null,
+            file: file,
+            lineNumber: start.Line + 1,
+            columnNumber: start.Character + 1,
+            endLineNumber: end.Line + 1,
+            endColumnNumber: end.Character + 1,
+            message: "'.Await()' can only be used in an async context. Resolved symbol: " + method);
     }
 }
