@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="..\DotAwait\build\DotAwait.props" />
-  <Import Project="..\DotAwait\build\DotAwait.targets" />
+  <Import Project="..\DotAwait\buildTransitive\DotAwait.props" />
+  <Import Project="..\DotAwait\buildTransitive\DotAwait.targets" />
   
   <PropertyGroup>
     <OutputType>Exe</OutputType>

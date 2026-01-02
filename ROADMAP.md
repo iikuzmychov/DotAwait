@@ -1,23 +1,5 @@
 # DotAwait Roadmap
 
-This repository implements **DotAwait**: a way to write `await` in a LINQ / fluent style using `.Await()` extension calls.
-
-## What is done (MVP / POC)
-
-- Build-time source rewriting via MSBuild (`DotAwait.Build`).
-  - `DotAwait.Build\DotAwait.targets` defines a target that runs before `CoreCompile` (and is skipped for `DesignTimeBuild`).
-  - `DotAwait.Build\RewriteSourcesTask.cs` parses project sources, rewrites them, writes outputs under `$(IntermediateOutputPath)dotawait\src\`, and replaces the `@(Compile)` item list for the `CoreCompile` invocation.
-  - Rewritten outputs are wrapped with `#line` directives referencing the original file path.
-- Roslyn-based syntax rewrite.
-  - `DotAwait.Build\AwaitRewriter.cs` detects invocation expressions shaped like `x.Await()` (no arguments) and rewrites them to an `await (...)` expression.
-  - The rewriter uses the `SemanticModel` to only rewrite when the resolved symbol is an extension method on `DotAwait.TaskExtensions`.
-  - `AwaitRewriter` records rewrite events (`AwaitRewriteEvent`) including kind and location.
-- A small console sample (`DotAwait.ConsoleTest`).
-  - `DotAwait.ConsoleTest\TaskExtensions.cs` defines `.Await()` extension method stubs that throw at runtime.
-  - The sample uses `.Await()` in code; successful builds imply those calls must be rewritten before execution.
-
-## What should be done next
-
 ### 1) Automated tests (high priority)
 
 Add automated tests that validate the build task and targets end-to-end.

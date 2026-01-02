@@ -5,7 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)injected\**" Visible="False" />
+    <Compile Include="$(MSBuildThisFileDirectory)injected\**" Visible="false" />
   </ItemGroup>
 
 </Project>

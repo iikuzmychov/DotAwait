@@ -2,7 +2,6 @@
 using Microsoft.Build.Utilities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 

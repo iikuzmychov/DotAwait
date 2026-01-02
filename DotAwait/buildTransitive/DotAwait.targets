@@ -1,0 +1,65 @@
+<Project>
+
+  <PropertyGroup>
+    <_DotAwaitTasksDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)tools'))</_DotAwaitTasksDirectory>
+    <_DotAwaitDll>$(_DotAwaitTasksDirectory)\DotAwait.dll</_DotAwaitDll>
+    <_DotAwaitIntermediateDirectory>$(IntermediateOutputPath).dotawait</_DotAwaitIntermediateDirectory>
+    <_DotAwaitRewrittenSourcesDirectory>$(_DotAwaitIntermediateDirectory)\src</_DotAwaitRewrittenSourcesDirectory>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(_DotAwaitIntermediateDirectory)\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <UsingTask TaskName="DotAwait.RewriteSourcesTask" AssemblyFile="$(_DotAwaitDll)" TaskFactory="TaskHostFactory" />
+
+  <!-- Replace original compile items with rewritten ones before compilation -->
+  <Target Name="DotAwait_Rewrite"
+          BeforeTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' != 'true'">
+
+    <PropertyGroup>
+      <DotAwaitActive>true</DotAwaitActive>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_DotAwaitOriginalCompile Include="@(Compile)" />
+      <_DotAwaitReferencePath Include="@(ReferencePath)" />
+    </ItemGroup>
+
+    <RewriteSourcesTask
+        Sources="@(_DotAwaitOriginalCompile)"
+        ProjectDirectory="$(MSBuildProjectDirectory)"
+        OutputDirectory="$(_DotAwaitRewrittenSourcesDirectory)"
+        DefineConstants="$(DefineConstants)"
+        LangVersion="$(LangVersion)"
+        ReferencePaths="@(_DotAwaitReferencePath)">
+      <Output TaskParameter="RewrittenSources" ItemName="_DotAwaitIntermediateCompile" />
+    </RewriteSourcesTask>
+
+    <ItemGroup>
+      <Compile Remove="@(Compile)" />
+      <Compile Include="@(_DotAwaitIntermediateCompile)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Restore original compile items after compilation -->
+  <Target Name="DotAwait_Restore"
+          AfterTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' == 'true'">
+
+    <ItemGroup>
+      <Compile Remove="@(Compile)" />
+      <Compile Include="@(_DotAwaitOriginalCompile)" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <DotAwaitActive>false</DotAwaitActive>
+    </PropertyGroup>
+  
+  </Target>
+
+  <!-- Remove intermediate directory on clean -->
+  <Target Name="DotAwait_Clean" AfterTargets="Clean" Condition="Exists('$(_DotAwaitIntermediateDirectory)')">
+    <Message Text="[DotAwait] Clearing intermediate directory: $([System.IO.Path]::GetFullPath('$(_DotAwaitIntermediateDirectory)'))" />
+    <RemoveDir Directories="$(_DotAwaitIntermediateDirectory)" />
+  </Target>
+
+</Project>

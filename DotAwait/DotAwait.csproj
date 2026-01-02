@@ -7,19 +7,38 @@
     <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <_BuildTransitiveDirectory>$(MSBuildProjectDirectory)\buildTransitive</_BuildTransitiveDirectory>
+    <_BuildTransitiveToolsDirectory>$(_BuildTransitiveDirectory)\tools</_BuildTransitiveToolsDirectory>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="build\**" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="18.0.2" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.10.0" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="build\**" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="$(_BuildTransitiveDirectory)\**" Pack="true" PackagePath="buildTransitive\" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="18.0.2" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.10.0" />
-  </ItemGroup>
+  <Target Name="CopyTasksToBuildTransitive" AfterTargets="Build">
+   
+    <MakeDir Directories="$(_BuildTransitiveToolsDirectory)" />
+
+    <ItemGroup>
+      <_TaskFiles Include="$(TargetPath)" />
+      <_TaskFiles Include="@(ReferenceCopyLocalPaths)" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_TaskFiles)" DestinationFolder="$(_BuildTransitiveToolsDirectory)" SkipUnchangedFiles="true" />
+
+  </Target>
+
+  <Target Name="PackTaskFiles" BeforeTargets="Pack">
+    <ItemGroup>
+      <None Include="$(_BuildTransitiveToolsDirectory)\**" Pack="true" PackagePath="buildTransitive\tools\" />
+    </ItemGroup>
+  </Target>
 
 </Project>
