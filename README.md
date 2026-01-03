@@ -47,9 +47,9 @@ namespace DotAwait
 {
     internal static partial class DotAwaitTaskExtensions
     {
-        public static T Await<T>(this MyTaskType<T> lazy) => Throw<T>();
+        public static T Await<T>(this MyTaskType<T> task) => Throw<T>();
         
-        public static void Await(this MyTaskType lazy) => Throw();
+        public static void Await(this MyTaskType task) => Throw();
     }
 }
 ```
