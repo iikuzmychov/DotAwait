@@ -11,8 +11,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   
-  <ItemGroup>
+<!--  <ItemGroup>
+    <PackageReference Include="DotAwait" Version="1.0.0-preview.1" />
+  </ItemGroup>-->
+  
+<!--  <ItemGroup>
     <ProjectReference Include="..\DotAwait\DotAwait.csproj" />
-  </ItemGroup>
+  </ItemGroup>-->
 
 </Project>
