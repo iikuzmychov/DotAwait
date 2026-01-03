@@ -9,8 +9,18 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <NoWarn>$(NoWarn);NU5128</NoWarn>
-    <_BuildTransitiveDirectory>$(MSBuildProjectDirectory)\buildTransitive</_BuildTransitiveDirectory>
-    <_BuildTransitiveToolsDirectory>$(_BuildTransitiveDirectory)\tools</_BuildTransitiveToolsDirectory>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Authors>Ihor Kuzmychov (iikuzmychov)</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Title>DotAwait</Title>
+    <Description>Write `await` in a fluent/LINQ-friendly style with a single `.Await()` extension call.</Description>
+    <PackageProjectUrl>https://github.com/iiKuzmychov/DotAwait</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/iiKuzmychov/DotAwait</RepositoryUrl>
+    <PackageTags>dotawait;.await;await;async;fluent;linq;task;valuetask</PackageTags>
+    <Version>1.0.0-preview.1</Version>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,7 +30,13 @@
 
   <ItemGroup>
     <None Include="$(_BuildTransitiveDirectory)\**" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <PropertyGroup>
+    <_BuildTransitiveDirectory>$(MSBuildProjectDirectory)\buildTransitive</_BuildTransitiveDirectory>
+    <_BuildTransitiveToolsDirectory>$(_BuildTransitiveDirectory)\tools</_BuildTransitiveToolsDirectory>
+  </PropertyGroup>
 
   <Target Name="CopyTasksToBuildTransitive" AfterTargets="Build">
    
