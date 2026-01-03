@@ -11,7 +11,7 @@ Write `await` in a fluent/LINQ-friendly style with a single `.Await()` extension
 
 ## Why
 
-In C#, `await` forces you to ï¿½drop outï¿½ of the fluent chain:
+In C#, `await` forces you to 'drop out' of the fluent chain:
 
 ```csharp
 var names = (await service.GetUsersAsync())
@@ -35,7 +35,7 @@ var names = service
 
 At build time, an MSBuild target rewrites `.Await()` calls into the `await` keyword.
 
-If you get a runtime exception from an `Await` stub, the rewrite step didn’t run.
+If you get a runtime exception from an `Await` stub, the rewrite step didn't run.
 
 ## User defined task-like types
 
