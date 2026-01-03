@@ -364,4 +364,4 @@ FodyWeavers.xsd
 
 # Custom
 DotAwait/buildTransitive/tools/
-.dotawait/
+

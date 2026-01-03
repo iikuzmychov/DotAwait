@@ -3,17 +3,33 @@
   <PropertyGroup>
     <_DotAwaitTasksDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)tools'))</_DotAwaitTasksDirectory>
     <_DotAwaitDll>$(_DotAwaitTasksDirectory)\DotAwait.dll</_DotAwaitDll>
-    <_DotAwaitIntermediateDirectory>$(IntermediateOutputPath).dotawait</_DotAwaitIntermediateDirectory>
-    <_DotAwaitRewrittenSourcesDirectory>$(_DotAwaitIntermediateDirectory)\src</_DotAwaitRewrittenSourcesDirectory>
-    <DefaultItemExcludes>$(DefaultItemExcludes);$(_DotAwaitIntermediateDirectory)\**</DefaultItemExcludes>
+    <_DotAwaitReportIssueUrl>https://github.com/iikuzmychov/DotAwait/issues/new</_DotAwaitReportIssueUrl>
   </PropertyGroup>
 
   <UsingTask TaskName="DotAwait.RewriteSourcesTask" AssemblyFile="$(_DotAwaitDll)" TaskFactory="TaskHostFactory" />
 
+  <!-- Initialize intermediate directories -->
+  <Target Name="DotAwait_Init"
+          BeforeTargets="CoreCompile"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true'">
+
+    <Error Condition="'$(IntermediateOutputPath)' == ''"
+           Text="[DotAwait] IntermediateOutputPath is empty. Please, report this issue at $(_DotAwaitReportIssueUrl)"
+           HelpLink="$(_DotAwaitReportIssueUrl)" />
+
+    <PropertyGroup>
+      <_DotAwaitIntermediateDirectory>$(IntermediateOutputPath).dotawait</_DotAwaitIntermediateDirectory>
+      <_DotAwaitRewrittenSourcesDirectory>$(_DotAwaitIntermediateDirectory)\src</_DotAwaitRewrittenSourcesDirectory>
+    </PropertyGroup>
+
+  </Target>
+
   <!-- Replace original compile items with rewritten ones before compilation -->
   <Target Name="DotAwait_Rewrite"
           BeforeTargets="CoreCompile"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' != 'true'">
+          DependsOnTargets="DotAwait_Init"
+          AfterTargets="ResolveReferences"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and '$(DotAwaitActive)' != 'true'">
 
     <PropertyGroup>
       <DotAwaitActive>true</DotAwaitActive>
@@ -37,13 +53,15 @@
     <ItemGroup>
       <Compile Remove="@(Compile)" />
       <Compile Include="@(_DotAwaitIntermediateCompile)" />
+      <FileWrites Include="@(_DotAwaitIntermediateCompile)" />
     </ItemGroup>
+
   </Target>
 
   <!-- Restore original compile items after compilation -->
   <Target Name="DotAwait_Restore"
           AfterTargets="CoreCompile"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(DotAwaitActive)' == 'true'">
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and '$(DotAwaitActive)' == 'true'">
 
     <ItemGroup>
       <Compile Remove="@(Compile)" />
@@ -54,12 +72,6 @@
       <DotAwaitActive>false</DotAwaitActive>
     </PropertyGroup>
   
-  </Target>
-
-  <!-- Remove intermediate directory on clean -->
-  <Target Name="DotAwait_Clean" AfterTargets="Clean" Condition="Exists('$(_DotAwaitIntermediateDirectory)')">
-    <Message Text="[DotAwait] Clearing intermediate directory: $([System.IO.Path]::GetFullPath('$(_DotAwaitIntermediateDirectory)'))" />
-    <RemoveDir Directories="$(_DotAwaitIntermediateDirectory)" />
   </Target>
 
 </Project>
