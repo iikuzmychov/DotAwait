@@ -1,9 +1,2 @@
-﻿using System.Text;
-
-Console.OutputEncoding = Encoding.UTF8;
-
-TestRunner.RunAsync().Await();
-
-Console.WriteLine();
-var lazyResult = new Lazy<int>(() => 5 + 5).Await();
-Console.WriteLine($"Lazy result: {lazyResult}");
+﻿// see result code in ILSpy or similar tool
+Task.Delay(1).Await();

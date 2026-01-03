@@ -19,7 +19,7 @@
     <PackageProjectUrl>https://github.com/iiKuzmychov/DotAwait</PackageProjectUrl>
     <RepositoryUrl>https://github.com/iiKuzmychov/DotAwait</RepositoryUrl>
     <PackageTags>dotawait;.await;await;async;fluent;linq;task;valuetask</PackageTags>
-    <Version>1.0.0-preview.1</Version>
+    <Version>1.0.0-preview.2</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 

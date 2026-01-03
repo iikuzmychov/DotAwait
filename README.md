@@ -18,7 +18,7 @@ var names = (await service.GetUsersAsync())
     .Where(u => u.IsActive)
     .Select(u => u.Name)
     .ToArray();
-````
+```
 
 With DotAwait, you can keep the chain intact:
 
@@ -33,11 +33,15 @@ var names = service
 
 ## How it works
 
-At build time, an MSBuild target rewrites `.Await()` calls into the `await` keyword.
+DotAwait hooks into compilation via MSBuild:
 
-If you get a runtime exception from an `Await` stub, the rewrite step didn't run.
+- A `buildTransitive` `.targets` file runs **before** `CoreCompile`.
+- Your C# files are rewritten with Roslyn so calls like `x.Await()` become `await (x)`.
+- The rewritten sources are emitted under `obj/.../.dotawait/src` and passed to the compiler.
 
-## User defined task-like types
+The `.Await()` methods are just stubs and should never execute.
+
+## Custom awaitable types support
 
 DotAwait supports user-defined [task-like types](https://devblogs.microsoft.com/dotnet/await-anything/).
 
@@ -56,6 +60,13 @@ namespace DotAwait
 
 It's not required to add both void and generic overloads, only those that you need.
 
+## To be done
+
+This is an early version, so there are some things to be done:
+- [ ] Automated tests
+- [ ] Rewriter optimizations
+- [ ] Edge cases validation
+- [ ] Use proper OutputKind in rewriter compilation options
 
 ## License
 
