@@ -1,5 +1,4 @@
 [![NuGet](https://img.shields.io/nuget/v/DotAwait)](https://www.nuget.org/packages/DotAwait/)
-[![Downloads](https://img.shields.io/nuget/dt/DotAwait)](https://www.nuget.org/packages/DotAwait/)
 [![License](https://img.shields.io/github/license/iiKuzmychov/DotAwait)](https://github.com/iiKuzmychov/DotAwait/blob/master/LICENSE.md)
 
 > [!WARNING]
