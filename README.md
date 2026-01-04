@@ -65,6 +65,7 @@ This is an early version, so there are some things to be done:
 - [ ] Automated tests
 - [ ] Rewriter optimizations
 - [ ] Edge cases validation
+- [ ] Fix debugger line matching issues
 
 ## License
 
