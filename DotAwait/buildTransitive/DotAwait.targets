@@ -46,6 +46,7 @@
         OutputDirectory="$(_DotAwaitRewrittenSourcesDirectory)"
         DefineConstants="$(DefineConstants)"
         LangVersion="$(LangVersion)"
+        OutputKind="$(OutputType)"
         ReferencePaths="@(_DotAwaitReferencePath)">
       <Output TaskParameter="RewrittenSources" ItemName="_DotAwaitIntermediateCompile" />
     </RewriteSourcesTask>

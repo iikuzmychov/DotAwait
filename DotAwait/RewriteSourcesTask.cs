@@ -12,6 +12,7 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
     [Required] public ITaskItem[] Sources { get; set; } = [];
     [Required] public string ProjectDirectory { get; set; } = string.Empty;
     [Required] public string OutputDirectory { get; set; } = string.Empty;
+    [Required] public string OutputKind { get; set; } = string.Empty;
     [Required] public string DefineConstants { get; set; } = string.Empty;
     [Required] public string LangVersion { get; set; } = string.Empty;
     [Required] public ITaskItem[] ReferencePaths { get; set; } = [];
@@ -28,7 +29,7 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 ParseLangVersion(LangVersion),
                 preprocessorSymbols: SplitConstants(DefineConstants));
 
-            var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary);
+            var compilationOptions = new CSharpCompilationOptions(ParseOutputKind(OutputKind));
             var metadataReferences = CreateMetadataReferences(ReferencePaths);
 
             var rewritten = new List<ITaskItem>(Sources.Length);
@@ -250,5 +251,22 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
             endLineNumber: end.Line + 1,
             endColumnNumber: end.Character + 1,
             message: "'.Await()' can only be used in an async context. Resolved symbol: " + method);
+    }
+
+    static OutputKind ParseOutputKind(string? outputType)
+    {
+        switch (outputType?.Trim().ToLowerInvariant())
+        {
+            case "library":
+                return Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary;
+            case "exe":
+                return Microsoft.CodeAnalysis.OutputKind.ConsoleApplication;
+            case "winexe":
+                return Microsoft.CodeAnalysis.OutputKind.WindowsApplication;
+            case "module":
+                return Microsoft.CodeAnalysis.OutputKind.NetModule;
+            default:
+                return Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary;
+        }
     }
 }

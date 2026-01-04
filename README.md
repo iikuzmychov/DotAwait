@@ -65,7 +65,6 @@ This is an early version, so there are some things to be done:
 - [ ] Automated tests
 - [ ] Rewriter optimizations
 - [ ] Edge cases validation
-- [ ] Use proper OutputKind in rewriter compilation options
 
 ## License
 
