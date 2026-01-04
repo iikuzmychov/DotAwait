@@ -36,6 +36,7 @@
 
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="..\img\icon.png" Pack="true" PackagePath="\" Visible="false" />
     <None Include="$(_BuildTransitiveDirectory)\**" Pack="true" PackagePath="buildTransitive\" />
     <None Include="contentFiles\cs\any\**" Pack="true" PackagePath="contentFiles\cs\any\" BuildAction="Compile" />
   </ItemGroup>

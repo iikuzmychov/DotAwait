@@ -4,6 +4,9 @@
     <File Path="NuGet.Config" />
     <File Path="README.md" />
   </Folder>
+  <Folder Name="/img/">
+    <File Path="img/icon.png" />
+  </Folder>
   <Project Path="DotAwait.ConsoleTest/DotAwait.ConsoleTest.csproj" />
   <Project Path="DotAwait/DotAwait.csproj" />
 </Solution>
