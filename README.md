@@ -34,9 +34,9 @@ var names = service
 
 DotAwait hooks into compilation via MSBuild:
 
-- A `buildTransitive` `.targets` file runs **before** `CoreCompile`.
-- Your C# files are rewritten with Roslyn so calls like `x.Await()` become `await (x)`.
-- The rewritten sources are emitted under `obj/.../.dotawait/src` and passed to the compiler.
+- Source rewriting task runs before `CoreCompile` target
+- Calls like `task.Await()` become `await task`
+- The rewritten sources are emitted under `obj/.../.dotawait/src` and passed to the compiler
 
 The `.Await()` methods are just stubs and should never execute.
 
@@ -66,6 +66,9 @@ This is an early version, so there are some things to be done:
 - [ ] Rewriter optimizations
 - [ ] Edge cases validation
 - [ ] Fix debugger line matching issues
+- [ ] C# 9 and below support (related to global usings)
+- [ ] Visual Studio extension for highlighting `.Await()` the same way as `await` keyword
+- [ ] Add cool package icon
 
 ## License
 

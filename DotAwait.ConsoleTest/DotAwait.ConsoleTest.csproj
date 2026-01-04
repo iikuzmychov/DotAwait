@@ -2,6 +2,10 @@
 
   <Import Project="..\DotAwait\buildTransitive\DotAwait.props" />
   <Import Project="..\DotAwait\buildTransitive\DotAwait.targets" />
+
+  <ItemGroup>
+    <Compile Include="..\DotAwait\contentFiles\cs\any\**" Visible="false" />
+  </ItemGroup>
   
   <PropertyGroup>
     <OutputType>Exe</OutputType>

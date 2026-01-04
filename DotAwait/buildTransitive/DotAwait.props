@@ -4,8 +4,4 @@
     <Using Include="DotAwait" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)injected\**" Visible="false" />
-  </ItemGroup>
-
 </Project>

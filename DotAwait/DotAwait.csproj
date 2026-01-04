@@ -23,20 +23,20 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <_BuildTransitiveDirectory>$(MSBuildProjectDirectory)\buildTransitive</_BuildTransitiveDirectory>
+    <_BuildTransitiveToolsDirectory>$(_BuildTransitiveDirectory)\tools</_BuildTransitiveToolsDirectory>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Utilities.Core" Version="18.0.2" PrivateAssets="All" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.10.0" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="$(_BuildTransitiveDirectory)\**" Pack="true" PackagePath="buildTransitive\" />
     <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="contentFiles\cs\any\**" Pack="true" PackagePath="contentFiles\cs\any\" BuildAction="Compile" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <_BuildTransitiveDirectory>$(MSBuildProjectDirectory)\buildTransitive</_BuildTransitiveDirectory>
-    <_BuildTransitiveToolsDirectory>$(_BuildTransitiveDirectory)\tools</_BuildTransitiveToolsDirectory>
-  </PropertyGroup>
 
   <Target Name="CopyTasksToBuildTransitive" AfterTargets="Build">
    
@@ -53,7 +53,7 @@
 
   <Target Name="PackTaskFiles" BeforeTargets="Pack">
     <ItemGroup>
-      <None Include="$(_BuildTransitiveToolsDirectory)\**" Pack="true" PackagePath="buildTransitive\tools\" />
+      <None Include="$(_BuildTransitiveDirectory)\**" Pack="true" PackagePath="buildTransitive\" />
     </ItemGroup>
   </Target>
 
