@@ -65,6 +65,7 @@ This is an early version, so there are some things to be done:
 - [ ] Automated tests
 - [ ] Rewriter optimizations
 - [ ] Edge cases validation
+- [ ] Verify .props and .targets doesn't affect transitive dependencies
 - [ ] Fix debugger line matching issues
 - [ ] C# 9 and below support (related to global usings)
 - [ ] Visual Studio extension for highlighting `.Await()` the same way as `await` keyword

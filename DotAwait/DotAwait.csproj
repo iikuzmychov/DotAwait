@@ -19,8 +19,9 @@
     <PackageProjectUrl>https://github.com/iiKuzmychov/DotAwait</PackageProjectUrl>
     <RepositoryUrl>https://github.com/iiKuzmychov/DotAwait</RepositoryUrl>
     <PackageTags>dotawait;.await;await;async;fluent;linq;task;valuetask</PackageTags>
-    <Version>1.0.0-preview.2</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionSuffix Condition="'$(VersionSuffix)' == ''">dev.$([System.DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))</VersionSuffix>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -34,7 +35,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(_BuildTransitiveDirectory)\**" Pack="true" PackagePath="buildTransitive\" />
     <None Include="contentFiles\cs\any\**" Pack="true" PackagePath="contentFiles\cs\any\" BuildAction="Compile" />
   </ItemGroup>
 
@@ -53,7 +55,7 @@
 
   <Target Name="PackTaskFiles" BeforeTargets="Pack">
     <ItemGroup>
-      <None Include="$(_BuildTransitiveDirectory)\**" Pack="true" PackagePath="buildTransitive\" />
+      <None Include="$(_BuildTransitiveToolsDirectory)\**" Pack="true" PackagePath="buildTransitive\tools" />
     </ItemGroup>
   </Target>
 
