@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/.items/">
     <File Path="LICENSE.md" />
+    <File Path="NuGet.Config" />
     <File Path="README.md" />
   </Folder>
   <Project Path="DotAwait.ConsoleTest/DotAwait.ConsoleTest.csproj" />

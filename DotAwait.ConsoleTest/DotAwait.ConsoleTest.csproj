@@ -1,11 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
-  <Import Project="..\DotAwait\buildTransitive\DotAwait.props" />
-  <Import Project="..\DotAwait\buildTransitive\DotAwait.targets" />
-
-  <ItemGroup>
-    <Compile Include="..\DotAwait\contentFiles\cs\any\**" Visible="false" />
-  </ItemGroup>
   
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -14,5 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="DotAwait" Version="*-*" />
+  </ItemGroup>
 
 </Project>
