@@ -4,4 +4,9 @@
     <Using Include="DotAwait" />
   </ItemGroup>
 
+  <!-- Hide content files -->
+  <Compile Update="@(Compile)">
+    <Visible Condition="'%(NuGetItemType)' == 'Compile' and '%(NuGetPackageId)' == 'DotAwait'">false</Visible>
+  </Compile>
+
 </Project>
