@@ -1,6 +1,10 @@
 <Project>
   
-  <ItemGroup>
+  <PropertyGroup>
+    <DotAwaitImplicitUsings Condition="'$(DotAwaitImplicitUsings)'==''">enable</DotAwaitImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(DotAwaitImplicitUsings)' == 'enable'">
     <Using Include="DotAwait" />
   </ItemGroup>
 

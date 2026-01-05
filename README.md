@@ -40,6 +40,16 @@ DotAwait hooks into compilation via MSBuild:
 
 The `.Await()` methods are just stubs and should never execute.
 
+## Implicit usings
+
+DotAwait provides a set of implicit usings to simplify your code. They are enabled by default which can cause problems for C# 9 or lower. You can disable them by adding the following to your project file:
+
+```xml
+<PropertyGroup>
+  <DotAwaitImplicitUsings>disable</DotAwaitImplicitUsings>
+</PropertyGroup>
+```
+
 ## Custom awaitable types support
 
 DotAwait supports user-defined [task-like types](https://devblogs.microsoft.com/dotnet/await-anything/).
@@ -67,7 +77,6 @@ This is an early version, so there are some things to be done:
 - [ ] Edge cases validation
 - [ ] Verify .props and .targets doesn't affect transitive dependencies
 - [ ] Fix debugger line matching issues
-- [ ] C# 9 and below support (related to global usings)
 - [ ] Visual Studio extension for highlighting `.Await()` the same way as `await` keyword
 
 ## License
