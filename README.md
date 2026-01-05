@@ -77,6 +77,7 @@ This is an early version, so there are some things to be done:
 - [ ] Edge cases validation
 - [ ] Verify .props and .targets doesn't affect transitive dependencies
 - [ ] Fix debugger line matching issues
+- [ ] Think about `await foreach` syntax 
 - [ ] Visual Studio extension for highlighting `.Await()` the same way as `await` keyword
 
 ## License
