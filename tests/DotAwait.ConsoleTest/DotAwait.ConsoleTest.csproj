@@ -12,8 +12,4 @@
     <PackageReference Include="DotAwait" Version="*-*" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <DotAwaitImplicitUsings>enabled</DotAwaitImplicitUsings>
-  </PropertyGroup>
-
 </Project>
