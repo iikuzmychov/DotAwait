@@ -1,10 +1,18 @@
 <Project>
   
   <PropertyGroup>
-    <DotAwaitImplicitUsings Condition="'$(DotAwaitImplicitUsings)'==''">enable</DotAwaitImplicitUsings>
+    <DotAwaitImplicitUsings Condition="'$(DotAwaitImplicitUsings)'==''">enabled</DotAwaitImplicitUsings>
+    <DotAwaitImplicitUsings>$([System.String]::Copy('$(DotAwaitImplicitUsings)').ToLowerInvariant())</DotAwaitImplicitUsings>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(DotAwaitImplicitUsings)' == 'enable'">
+  <!-- validation -->
+  <Target Name="ValidateDotAwaitImplicitUsings" BeforeTargets="PrepareForBuild">
+    <Error
+      Condition="'$(DotAwaitImplicitUsings)' != 'enabled' and '$(DotAwaitImplicitUsings)' != 'disabled'"
+      Text="DotAwaitImplicitUsings must be 'enabled' or 'disabled'. Current value: '$(DotAwaitImplicitUsings)'." />
+  </Target>
+
+  <ItemGroup Condition="'$(DotAwaitImplicitUsings)' == 'enabled'">
     <Using Include="DotAwait" />
   </ItemGroup>
 
