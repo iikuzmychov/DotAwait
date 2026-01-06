@@ -6,7 +6,7 @@
 
 # DotAwait
 
-Write `await` in a fluent/LINQ-friendly style with a single `.Await()` extension call.
+This package make possible to use `await` in a fluent/LINQ-friendly style via `.Await()` extension call.
 
 ## Why
 
