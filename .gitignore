@@ -363,5 +363,4 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # Custom
-DotAwait/buildTransitive/tools/
-
+src/DotAwait/buildTransitive/tools

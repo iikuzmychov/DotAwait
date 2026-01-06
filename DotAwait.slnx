@@ -7,6 +7,10 @@
   <Folder Name="/img/">
     <File Path="img/icon.png" />
   </Folder>
-  <Project Path="DotAwait.ConsoleTest/DotAwait.ConsoleTest.csproj" />
-  <Project Path="DotAwait/DotAwait.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/DotAwait/DotAwait.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DotAwait.ConsoleTest/DotAwait.ConsoleTest.csproj" />
+  </Folder>
 </Solution>
