@@ -40,6 +40,7 @@
     <None Include="..\..\img\icon.png" Pack="true" PackagePath="\" Visible="false" />
     <None Include="$(_BuildTransitiveDirectory)\**" Pack="true" PackagePath="buildTransitive\" />
     <None Include="contentFiles\cs\any\**" Pack="true" PackagePath="contentFiles\cs\any\" BuildAction="Compile" />
+    <Compile Remove="contentFiles\cs\any\**" />
   </ItemGroup>
 
   <Target Name="CopyTasksToBuildTransitive" AfterTargets="Build">

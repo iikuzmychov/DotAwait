@@ -8,6 +8,14 @@
 
   <UsingTask TaskName="DotAwait.RewriteSourcesTask" AssemblyFile="$(_DotAwaitDll)" TaskFactory="TaskHostFactory" />
 
+  <!-- DotAwaitImplicitUsings validation -->
+  <Target Name="DotAwait_ValidateImplicitUsings" BeforeTargets="PrepareForBuild">
+    
+    <Error Condition="'$(DotAwaitImplicitUsings)' != 'enable' and '$(DotAwaitImplicitUsings)' != 'disable'"
+           Text="DotAwaitImplicitUsings must be 'enable' or 'disabled'. Current value: '$(DotAwaitImplicitUsings)'." />
+
+  </Target>
+
   <!-- Initialize intermediate directories -->
   <Target Name="DotAwait_Init"
           BeforeTargets="CoreCompile"
@@ -57,22 +65,6 @@
       <FileWrites Include="@(_DotAwaitIntermediateCompile)" />
     </ItemGroup>
 
-  </Target>
-
-  <!-- Restore original compile items after compilation -->
-  <Target Name="DotAwait_Restore"
-          AfterTargets="CoreCompile"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and '$(DotAwaitActive)' == 'true'">
-
-    <ItemGroup>
-      <Compile Remove="@(Compile)" />
-      <Compile Include="@(_DotAwaitOriginalCompile)" />
-    </ItemGroup>
-
-    <PropertyGroup>
-      <DotAwaitActive>false</DotAwaitActive>
-    </PropertyGroup>
-  
   </Target>
 
 </Project>
