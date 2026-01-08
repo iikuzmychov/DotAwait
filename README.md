@@ -77,7 +77,7 @@ To make your type compatible, add the following to your project:
 ```csharp
 namespace DotAwait
 {
-    internal static partial class DotAwaitTaskExtensions
+    partial class DotAwaitTaskExtensions
     {
         public static T Await<T>(this MyTaskType<T> task) => DesignTimeStub<T>();
         
