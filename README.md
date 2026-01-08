@@ -6,11 +6,11 @@
 
 # DotAwait
 
-This package make possible to use `await` in a fluent/LINQ-friendly style via `.Await()` extension call.
+DotAwait lets you use `await` in a fluent / LINQ-friendly style via an `.Await()` extension call that gets rewritten at build time.
 
 ## Why
 
-In C#, `await` forces you to 'drop out' of the fluent chain:
+In C#, `await` often breaks fluent chains:
 
 ```csharp
 var names = (await service.GetUsersAsync())
@@ -32,17 +32,35 @@ var names = service
 
 ## How it works
 
-DotAwait hooks into compilation via MSBuild:
+DotAwait integrates via MSBuild targets:
 
-- Source rewriting task runs before `CoreCompile` target
-- Calls like `task.Await()` become `await task`
-- The rewritten sources are emitted under `obj/.../.dotawait/src` and passed to the compiler
+- A source-rewriting step runs before the `CoreCompile` target
+- Calls like `task.Await()` are rewritten into `await task`
+- All `DotAwaitTaskExtensions` declarations in the `DotAwait` namespace are removed from the rewritten sources (they are only needed for design-time type checking)
+- Rewritten sources are emitted under `obj/.../.dotawait/src` and then compiled
 
-The `.Await()` methods are just stubs and should never execute.
+## Compile time safety
+
+DotAwait is designed to be safe to use in production. The rewrite step is **all-or-nothing** - if anything goes wrong, the build fails at compile time, not at runtime.
+
+How:
+
+- All `.Await()` extension methods are implemented as calls to `DesignTimeStub()`.
+- `DesignTimeStub()` exists only under `#if DOTAWAIT_DESIGN_TIME`.
+- `DOTAWAIT_DESIGN_TIME` is defined only for design-time builds (IDE/type-checking).
+
+So:
+
+- In the IDE, `.Await()` is available and type-checks correctly
+- In a normal build, `.Await()` is rewritten into `await`. If rewriting fails, the build fails
 
 ## Implicit usings
 
-DotAwait provides a set of implicit usings to simplify your code. They are enabled by default which can cause problems for C# 9 or lower. You can disable them by adding the following to your project file:
+DotAwait provides implicit usings enabled by default to simplify usage.
+
+Implicit usings are a C# 10+ feature, so they may cause issues in projects using older language versions.
+
+To disable DotAwait implicit usings, add the following to your project file:
 
 ```xml
 <PropertyGroup>
@@ -50,34 +68,35 @@ DotAwait provides a set of implicit usings to simplify your code. They are enabl
 </PropertyGroup>
 ```
 
-## Custom awaitable types support
+## Custom awaitable (task-like) types
 
 DotAwait supports user-defined [task-like types](https://devblogs.microsoft.com/dotnet/await-anything/).
 
-To make your type compatible you should add the following definition to your project:
+To make your type compatible, add the following to your project:
+
 ```csharp
 namespace DotAwait
 {
     internal static partial class DotAwaitTaskExtensions
     {
-        public static T Await<T>(this MyTaskType<T> task) => Throw<T>();
+        public static T Await<T>(this MyTaskType<T> task) => DesignTimeStub<T>();
         
-        public static void Await(this MyTaskType task) => Throw();
+        public static void Await(this MyTaskType task) => DesignTimeStub();
     }
 }
 ```
 
-It's not required to add both void and generic overloads, only those that you need.
+You only need the overloads you actually use.
 
-## To be done
+## Roadmap
 
-This is an early version, so there are some things to be done:
-- [ ] Automated tests
-- [ ] Rewriter optimizations
-- [ ] Edge cases validation
-- [ ] Verify .props and .targets doesn't affect transitive dependencies
-- [ ] Fix debugger line matching issues
-- [ ] Visual Studio extension for highlighting `.Await()` the same way as `await` keyword
+* [ ] Automated tests
+* [ ] Code cleanup
+* [ ] Rewriter optimizations
+* [ ] Edge-case validation
+* [ ] Ensure `.props` / `.targets` do not affect transitive dependencies
+* [ ] Fix debugger line mapping issues
+* [ ] Visual Studio extension to highlight `.Await()` similarly to the `await` keyword
 
 ## License
 

@@ -2,6 +2,7 @@
 using Microsoft.Build.Utilities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -37,7 +38,6 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
             var trees = new List<SyntaxTree>();
             var treeToSource = new Dictionary<SyntaxTree, (ITaskItem Source, string FullPath, string OutputPath)>();
-
 
             foreach (var src in Sources)
             {
@@ -120,6 +120,24 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                     }
                 }
 
+                // Remove DotAwaitTaskExtensions declarations (including all partials) *after* rewriting.
+                if (ContainsDotAwaitTaskExtensionsDeclaration(newRoot))
+                {
+                    newRoot = RemoveDotAwaitTaskExtensionsDeclarations(newRoot);
+
+                    if (newRoot is CompilationUnitSyntax cu && !cu.Members.Any())
+                    {
+                        // Dropping the file entirely can break #line mapping; emit an empty file instead.
+                        var withLineEmpty = "#line 1 \"" + fullPath + "\"\n#line default\n";
+                        File.WriteAllText(outPath, withLineEmpty, Encoding.UTF8);
+
+                        var emptyItem = new TaskItem(outPath);
+                        src.CopyMetadataTo(emptyItem);
+                        rewritten.Add(emptyItem);
+                        continue;
+                    }
+                }
+
                 var rewrittenText = newRoot.ToFullString();
 
                 // Keep diagnostics/stack traces pointing to the original file.
@@ -144,6 +162,72 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
         catch (Exception ex)
         {
             Log.LogErrorFromException(ex, showStackTrace: true);
+            return false;
+        }
+    }
+
+    static bool ContainsDotAwaitTaskExtensionsDeclaration(SyntaxNode root)
+    {
+        var walker = new DotAwaitTaskExtensionsWalker();
+        walker.Visit(root);
+        return walker.Found;
+    }
+
+    static SyntaxNode RemoveDotAwaitTaskExtensionsDeclarations(SyntaxNode root)
+    {
+        var rewriter = new DotAwaitTaskExtensionsRemover();
+        return rewriter.Visit(root) ?? root;
+    }
+
+    sealed class DotAwaitTaskExtensionsWalker : CSharpSyntaxWalker
+    {
+        public bool Found { get; private set; }
+
+        public override void VisitClassDeclaration(ClassDeclarationSyntax node)
+        {
+            if (Found)
+                return;
+
+            if (!node.Identifier.ValueText.Equals("DotAwaitTaskExtensions", StringComparison.Ordinal))
+            {
+                base.VisitClassDeclaration(node);
+                return;
+            }
+
+            if (DotAwaitTaskExtensionsRemover.IsInDotAwaitNamespace(node))
+            {
+                Found = true;
+                return;
+            }
+
+            base.VisitClassDeclaration(node);
+        }
+    }
+
+    sealed class DotAwaitTaskExtensionsRemover : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitClassDeclaration(ClassDeclarationSyntax node)
+        {
+            if (node.Identifier.ValueText.Equals("DotAwaitTaskExtensions", StringComparison.Ordinal) &&
+                IsInDotAwaitNamespace(node))
+            {
+                return null;
+            }
+
+            return base.VisitClassDeclaration(node);
+        }
+
+        internal static bool IsInDotAwaitNamespace(SyntaxNode node)
+        {
+            for (SyntaxNode? current = node.Parent; current is not null; current = current.Parent)
+            {
+                if (current is NamespaceDeclarationSyntax nd)
+                    return nd.Name.ToString().Equals("DotAwait", StringComparison.Ordinal);
+
+                if (current is FileScopedNamespaceDeclarationSyntax fnd)
+                    return fnd.Name.ToString().Equals("DotAwait", StringComparison.Ordinal);
+            }
+
             return false;
         }
     }

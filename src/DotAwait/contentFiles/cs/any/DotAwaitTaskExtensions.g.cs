@@ -5,27 +5,12 @@ namespace DotAwait
     [global::Microsoft.CodeAnalysis.Embedded]
     internal static partial class DotAwaitTaskExtensions
     {
-        private static InvalidOperationException CreateThisCodeShouldNeverBeReachedException()
-        {
-            var helpLink = "https://github.com/iikuzmychov/DotAwait/issues/new";
-            var exceptionMessage = $"[DotAwait] This code should never be reached. If you see this exception it means that the DotAwait library has failed to correctly rewrite some files during the build process. Please report this issue at {helpLink}. As a temporary workaround, you can switch to regular 'await ...' syntax.";
+        public static T Await<T>(this global::System.Threading.Tasks.Task<T> task) => DesignTimeStub<T>();
 
-            return new InvalidOperationException(exceptionMessage)
-            {
-                HelpLink = helpLink
-            };
-        }
+        public static void Await(this global::System.Threading.Tasks.Task task) => DesignTimeStub();
 
-        private static void Throw() => throw CreateThisCodeShouldNeverBeReachedException();
+        public static T Await<T>(this global::System.Threading.Tasks.ValueTask<T> task) => DesignTimeStub<T>();
 
-        private static T Throw<T>() => throw CreateThisCodeShouldNeverBeReachedException();
-
-        public static T Await<T>(this global::System.Threading.Tasks.Task<T> task) => Throw<T>();
-
-        public static void Await(this global::System.Threading.Tasks.Task task) => Throw();
-
-        public static T Await<T>(this global::System.Threading.Tasks.ValueTask<T> task) => Throw<T>();
-
-        public static void Await(this global::System.Threading.Tasks.ValueTask task) => Throw();
+        public static void Await(this global::System.Threading.Tasks.ValueTask task) => DesignTimeStub();
     }
 }

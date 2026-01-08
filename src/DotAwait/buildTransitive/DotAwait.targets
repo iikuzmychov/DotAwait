@@ -16,6 +16,13 @@
 
   </Target>
 
+  <!-- Design-time build constant -->
+  <Target Name="DotAwait_DesignTime" BeforeTargets="CoreCompile" Condition="'$(DesignTimeBuild)' == 'true'">
+    <PropertyGroup>
+      <DefineConstants>$(DefineConstants);DOTAWAIT_DESIGN_TIME</DefineConstants>
+    </PropertyGroup>
+  </Target>
+
   <!-- Initialize intermediate directories -->
   <Target Name="DotAwait_Init"
           BeforeTargets="CoreCompile"
@@ -37,10 +44,10 @@
           BeforeTargets="CoreCompile"
           DependsOnTargets="DotAwait_Init"
           AfterTargets="ResolveReferences"
-          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and '$(DotAwaitActive)' != 'true'">
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true' and '$(_DotAwaitActive)' != 'true'">
 
     <PropertyGroup>
-      <DotAwaitActive>true</DotAwaitActive>
+      <_DotAwaitActive>true</_DotAwaitActive>
     </PropertyGroup>
 
     <ItemGroup>
