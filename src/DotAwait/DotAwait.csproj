@@ -5,9 +5,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
@@ -27,8 +29,8 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <_BuildTransitiveDirectory>$(MSBuildProjectDirectory)\buildTransitive</_BuildTransitiveDirectory>
-    <_BuildTransitiveToolsDirectory>$(_BuildTransitiveDirectory)\tools</_BuildTransitiveToolsDirectory>
+    <_BuildDirectory>$(MSBuildProjectDirectory)\build</_BuildDirectory>
+    <_BuildToolsDirectory>$(_BuildDirectory)\tools</_BuildToolsDirectory>
   </PropertyGroup>
 
   <ItemGroup>
@@ -43,32 +45,32 @@
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
     <None Include="..\..\img\icon.png" Pack="true" PackagePath="\" Visible="false" />
-    <None Include="$(_BuildTransitiveDirectory)\**" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="$(_BuildDirectory)\**" Pack="true" PackagePath="build\" />
     <None Include="contentFiles\cs\any\**" Pack="true" PackagePath="contentFiles\cs\any\" BuildAction="Compile" />
     <Compile Remove="contentFiles\cs\any\**" />
   </ItemGroup>
 
   <Target Name="CopyTasksToBuildTransitive" AfterTargets="Build">
    
-    <MakeDir Directories="$(_BuildTransitiveToolsDirectory)" />
+    <MakeDir Directories="$(_BuildToolsDirectory)" />
 
     <ItemGroup>
       <_TaskFiles Include="$(TargetPath)" />
       <_TaskFiles Include="@(ReferenceCopyLocalPaths)" />
     </ItemGroup>
 
-    <Copy SourceFiles="@(_TaskFiles)" DestinationFolder="$(_BuildTransitiveToolsDirectory)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_TaskFiles)" DestinationFolder="$(_BuildToolsDirectory)" SkipUnchangedFiles="true" />
 
   </Target>
 
   <Target Name="PackTaskFiles" BeforeTargets="Pack">
     <ItemGroup>
-      <None Include="$(_BuildTransitiveToolsDirectory)\**" Pack="true" PackagePath="buildTransitive\tools" />
+      <None Include="$(_BuildToolsDirectory)\**" Pack="true" PackagePath="buildTransitive\tools" />
     </ItemGroup>
   </Target>
 
-  <Target Name="CleanTools" AfterTargets="Clean" Condition="Exists('$(_BuildTransitiveToolsDirectory)')">
-    <RemoveDir Directories="$(_BuildTransitiveToolsDirectory)" />
+  <Target Name="CleanTools" AfterTargets="Clean" Condition="Exists('$(_BuildToolsDirectory)')">
+    <RemoveDir Directories="$(_BuildToolsDirectory)" />
   </Target>
 
 </Project>
