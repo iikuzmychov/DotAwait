@@ -41,7 +41,7 @@ DotAwait integrates via MSBuild targets:
 
 ## Compile time safety
 
-DotAwait is designed to be safe to use in production. The rewrite step is **all-or-nothing** - if anything goes wrong, the build fails at compile time, not at runtime.
+DotAwait is designed to be safe and not cause unexpected runtime errors. The rewrite step is **all-or-nothing** - if anything goes wrong, the build fails at compile time, not at runtime.
 
 How:
 
