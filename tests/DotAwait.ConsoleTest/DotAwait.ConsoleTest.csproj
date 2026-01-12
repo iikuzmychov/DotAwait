@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotAwait" Version="*-*" />
+    <PackageReference Include="DotAwait" Version="*-dev.*" />
   </ItemGroup>
 
 </Project>

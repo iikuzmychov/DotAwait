@@ -8,9 +8,9 @@
 
 DotAwait lets you use `await` in a fluent / LINQ-friendly style via an `.Await()` extension call that gets rewritten at build time.
 
-## Why
+## Usage
 
-In C#, `await` often breaks fluent chains:
+While `await` often breaks fluent chains:
 
 ```csharp
 var names = (await service.GetUsersAsync())
@@ -19,7 +19,7 @@ var names = (await service.GetUsersAsync())
     .ToArray();
 ```
 
-With DotAwait, you can keep the chain intact:
+with DotAwait, you can keep the chain intact:
 
 ```csharp
 var names = service
@@ -30,14 +30,23 @@ var names = service
     .ToArray();
 ```
 
+## Installation
+
+Install the [DotAwait NuGet package](https://www.nuget.org/packages/DotAwait/) into your project via NuGet Package Manager or the .NET CLI:
+   ```bash
+   dotnet add package DotAwait
+   ```
+
 ## How it works
 
-DotAwait integrates via MSBuild targets:
+DotAwait integrates via MSBuild:
 
-- A source-rewriting step runs before the `CoreCompile` target
-- Calls like `task.Await()` are rewritten into `await task`
-- All `DotAwaitTaskExtensions` declarations in the `DotAwait` namespace are removed from the rewritten sources (they are only needed for design-time type checking)
-- Rewritten sources are emitted under `obj/.../.dotawait/src` and then compiled
+- Content files contains `.Await()` extension methods marked with `[DotAwait]` attribute
+- A source-rewriting task runs before the `CoreCompile` target
+- Calls like `task.Await()` become `await task`
+- All the methods marked with `[DotAwait]` attribute are removed from the rewritten sources
+- Rewritten sources are emitted under `obj/.../.dotawait/src`
+- Compilation uses rewritten sources instead of original ones
 
 ## Compile time safety
 
@@ -45,14 +54,14 @@ DotAwait is designed to be safe and not cause unexpected runtime errors. The rew
 
 How:
 
-- All `.Await()` extension methods are implemented as calls to `DesignTimeStub()`.
-- `DesignTimeStub()` exists only under `#if DOTAWAIT_DESIGN_TIME`.
-- `DOTAWAIT_DESIGN_TIME` is defined only for design-time builds (IDE/type-checking).
+- All `.Await()` extension methods are implemented as methods with no body
+- For design-time builds DotAwait adds `DOTAWAIT_DESIGN_TIME` symbol that enables stub implementations of these methods
 
 So:
 
 - In the IDE, `.Await()` is available and type-checks correctly
-- In a normal build, `.Await()` is rewritten into `await`. If rewriting fails, the build fails
+- In a normal build, `.Await()` is rewritten into `await` and the partial method definitions are removed
+- If rewriting fails, the build fails because partial methods have no body
 
 ## Implicit usings
 
@@ -70,23 +79,34 @@ To disable DotAwait implicit usings, add the following to your project file:
 
 ## Custom awaitable (task-like) types
 
-DotAwait supports user-defined [task-like types](https://devblogs.microsoft.com/dotnet/await-anything/).
+DotAwait supports [custom awaitable types](https://devblogs.microsoft.com/dotnet/await-anything/).
 
-To make your type compatible, add the following to your project:
+To make your type compatible, you should create an extension method marked with `[DotAwait]` attribute with single parameter of your awaitable type.
 
+The recommended implementation looks like this (you only need the overloads you actually use):
 ```csharp
 namespace DotAwait
 {
-    partial class DotAwaitTaskExtensions
+    internal static partial class DotAwaitTaskExtensions
     {
-        public static T Await<T>(this MyTaskType<T> task) => DesignTimeStub<T>();
-        
-        public static void Await(this MyTaskType task) => DesignTimeStub();
+        [DotAwait]
+        public static T Await<T>(this MyTaskType<T> task)
+#if DOTAWAIT_DESIGN_TIME
+            => throw CreateUnreachableException()
+#endif
+            ;
+
+        [DotAwait]
+        public static void Await(this MyTaskType task)
+#if DOTAWAIT_DESIGN_TIME
+            => throw CreateUnreachableException()
+#endif
+            ;
     }
 }
 ```
 
-You only need the overloads you actually use.
+It's planned to simplify stub definition by auto-generating these stubs in future releases.
 
 ## Roadmap
 
@@ -96,6 +116,7 @@ You only need the overloads you actually use.
 * [ ] Edge-case validation
 * [ ] Ensure `.props` / `.targets` do not affect transitive dependencies
 * [ ] Fix debugger line mapping issues
+* [ ] Auto-generated stubs for custom awaitable types
 * [ ] Visual Studio extension to highlight `.Await()` similarly to the `await` keyword
 
 ## License

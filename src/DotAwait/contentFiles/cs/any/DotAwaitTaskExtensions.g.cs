@@ -2,15 +2,52 @@
 
 namespace DotAwait
 {
-    [global::Microsoft.CodeAnalysis.Embedded]
+    [global::Microsoft.CodeAnalysis.EmbeddedAttribute]
     internal static partial class DotAwaitTaskExtensions
     {
-        public static T Await<T>(this global::System.Threading.Tasks.Task<T> task) => DesignTimeStub<T>();
+        private static global::System.Diagnostics.UnreachableException CreateUnreachableException()
+        {
+            return new global::System.Diagnostics.UnreachableException("[DotAwait] This code should never be reached.");
+        }
 
-        public static void Await(this global::System.Threading.Tasks.Task task) => DesignTimeStub();
+        [global::DotAwait.DotAwaitAttribute]
+        public static T Await<T>(this global::System.Threading.Tasks.Task<T> task)
+#if DOTAWAIT_DESIGN_TIME
+        {
+            throw CreateUnreachableException();
+        }
+#else
+        ;
+#endif
 
-        public static T Await<T>(this global::System.Threading.Tasks.ValueTask<T> task) => DesignTimeStub<T>();
+        [global::DotAwait.DotAwaitAttribute]
+        public static void Await(this global::System.Threading.Tasks.Task task)
+#if DOTAWAIT_DESIGN_TIME
+        {
+            throw CreateUnreachableException();
+        }
+#else
+        ;
+#endif
 
-        public static void Await(this global::System.Threading.Tasks.ValueTask task) => DesignTimeStub();
+        [global::DotAwait.DotAwaitAttribute]
+        public static T Await<T>(this global::System.Threading.Tasks.ValueTask<T> task)
+#if DOTAWAIT_DESIGN_TIME
+        {
+            throw CreateUnreachableException();
+        }
+#else
+        ;
+#endif
+
+        [global::DotAwait.DotAwaitAttribute]
+        public static void Await(this global::System.Threading.Tasks.ValueTask task)
+#if DOTAWAIT_DESIGN_TIME
+        {
+            throw CreateUnreachableException();
+        }
+#else
+        ;
+#endif
     }
 }

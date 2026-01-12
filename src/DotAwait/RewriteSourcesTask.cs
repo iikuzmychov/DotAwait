@@ -1,4 +1,5 @@
-﻿using Microsoft.Build.Framework;
+﻿using DotAwait.Rewriters;
+using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -48,14 +49,6 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                     continue;
                 }
 
-                fullPath = Path.GetFullPath(fullPath);
-
-                if (!fullPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-                {
-                    unchanged.Add(src);
-                    continue;
-                }
-
                 if (!File.Exists(fullPath))
                 {
                     unchanged.Add(src);
@@ -84,63 +77,27 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 references: metadataReferences,
                 options: compilationOptions);
 
-            var totalRewritten = 0;
-            var totalSkippedNotOurs = 0;
-            var totalInvalidNonAsyncContext = 0;
-            var totalUnresolved = 0;
-
             foreach (var tree in trees)
             {
                 var (src, fullPath, outPath) = treeToSource[tree];
 
-                var semanticModel = compilation.GetSemanticModel(tree);
-                var root = tree.GetRoot();
+                var model = compilation.GetSemanticModel(tree);
+                var root = (CompilationUnitSyntax)tree.GetRoot();
 
-                var rewriter = new AwaitRewriter(semanticModel);
-                var newRoot = rewriter.Visit(root);
+                var rewrittenRoot = (CompilationUnitSyntax?)new DotAwaitMethodCallRewriter(model).Visit(root) ?? root;
 
-                foreach (var e in rewriter.Events)
-                {
-                    switch (e.Kind)
-                    {
-                        case AwaitRewriter.AwaitRewriteKind.Rewritten:
-                            totalRewritten++;
-                            break;
-                        case AwaitRewriter.AwaitRewriteKind.SkippedNotOurs:
-                            totalSkippedNotOurs++;
-                            break;
-                        case AwaitRewriter.AwaitRewriteKind.InvalidNonAsyncContext:
-                            totalInvalidNonAsyncContext++;
-                            LogAwaitInvalidNonAsyncContext(e);
-                            break;
-                        case AwaitRewriter.AwaitRewriteKind.Unresolved:
-                            totalUnresolved++;
-                            LogAwaitUnresolved(e);
-                            break;
-                    }
-                }
+                // Build a new tree that matches rewrittenRoot
+                var rewrittenTree = tree.WithRootAndOptions(rewrittenRoot, tree.Options);
 
-                // Remove DotAwaitTaskExtensions declarations (including all partials) *after* rewriting.
-                if (ContainsDotAwaitTaskExtensionsDeclaration(newRoot))
-                {
-                    newRoot = RemoveDotAwaitTaskExtensionsDeclarations(newRoot);
+                // Get a semantic model that matches rewrittenTree
+                var rewrittenCompilation = compilation.ReplaceSyntaxTree(tree, rewrittenTree);
+                var rewrittenModel = rewrittenCompilation.GetSemanticModel(rewrittenTree);
 
-                    if (newRoot is CompilationUnitSyntax cu && !cu.Members.Any())
-                    {
-                        // Dropping the file entirely can break #line mapping; emit an empty file instead.
-                        var withLineEmpty = "#line 1 \"" + fullPath + "\"\n#line default\n";
-                        File.WriteAllText(outPath, withLineEmpty, Encoding.UTF8);
+                // Remove any member annotated with [DotAwait] after rewriting.
+                var cleanedRoot = (CompilationUnitSyntax?)new DotAwaitMethodDeclarationRemover(rewrittenModel).Visit(rewrittenRoot) ?? rewrittenRoot;
 
-                        var emptyItem = new TaskItem(outPath);
-                        src.CopyMetadataTo(emptyItem);
-                        rewritten.Add(emptyItem);
-                        continue;
-                    }
-                }
+                var rewrittenText = cleanedRoot.ToFullString();
 
-                var rewrittenText = newRoot.ToFullString();
-
-                // Keep diagnostics/stack traces pointing to the original file.
                 var withLine = "#line 1 \"" + fullPath + "\"\n" + rewrittenText + "\n#line default\n";
                 File.WriteAllText(outPath, withLine, Encoding.UTF8);
 
@@ -149,85 +106,12 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 rewritten.Add(item);
             }
 
-            Log.LogMessage(
-                MessageImportance.Low,
-                $"DotAwait: Await() rewritten={totalRewritten}, skipped(not ours)={totalSkippedNotOurs}, invalid(non-async)={totalInvalidNonAsyncContext}, unresolved={totalUnresolved}.");
-
-            if (totalUnresolved != 0 || totalInvalidNonAsyncContext != 0)
-                return false;
-
             RewrittenSources = [..rewritten, ..unchanged];
             return true;
         }
         catch (Exception ex)
         {
             Log.LogErrorFromException(ex, showStackTrace: true);
-            return false;
-        }
-    }
-
-    static bool ContainsDotAwaitTaskExtensionsDeclaration(SyntaxNode root)
-    {
-        var walker = new DotAwaitTaskExtensionsWalker();
-        walker.Visit(root);
-        return walker.Found;
-    }
-
-    static SyntaxNode RemoveDotAwaitTaskExtensionsDeclarations(SyntaxNode root)
-    {
-        var rewriter = new DotAwaitTaskExtensionsRemover();
-        return rewriter.Visit(root) ?? root;
-    }
-
-    sealed class DotAwaitTaskExtensionsWalker : CSharpSyntaxWalker
-    {
-        public bool Found { get; private set; }
-
-        public override void VisitClassDeclaration(ClassDeclarationSyntax node)
-        {
-            if (Found)
-                return;
-
-            if (!node.Identifier.ValueText.Equals("DotAwaitTaskExtensions", StringComparison.Ordinal))
-            {
-                base.VisitClassDeclaration(node);
-                return;
-            }
-
-            if (DotAwaitTaskExtensionsRemover.IsInDotAwaitNamespace(node))
-            {
-                Found = true;
-                return;
-            }
-
-            base.VisitClassDeclaration(node);
-        }
-    }
-
-    sealed class DotAwaitTaskExtensionsRemover : CSharpSyntaxRewriter
-    {
-        public override SyntaxNode? VisitClassDeclaration(ClassDeclarationSyntax node)
-        {
-            if (node.Identifier.ValueText.Equals("DotAwaitTaskExtensions", StringComparison.Ordinal) &&
-                IsInDotAwaitNamespace(node))
-            {
-                return null;
-            }
-
-            return base.VisitClassDeclaration(node);
-        }
-
-        internal static bool IsInDotAwaitNamespace(SyntaxNode node)
-        {
-            for (SyntaxNode? current = node.Parent; current is not null; current = current.Parent)
-            {
-                if (current is NamespaceDeclarationSyntax nd)
-                    return nd.Name.ToString().Equals("DotAwait", StringComparison.Ordinal);
-
-                if (current is FileScopedNamespaceDeclarationSyntax fnd)
-                    return fnd.Name.ToString().Equals("DotAwait", StringComparison.Ordinal);
-            }
-
             return false;
         }
     }
@@ -293,48 +177,6 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
             sb.Append(b.ToString("x2"));
 
         return sb.ToString();
-    }
-
-    void LogAwaitUnresolved(AwaitRewriter.AwaitRewriteEvent e)
-    {
-        var span = e.Location.GetLineSpan();
-        var file = span.Path;
-        var start = span.StartLinePosition;
-        var end = span.EndLinePosition;
-
-        var method = string.IsNullOrWhiteSpace(e.DisplaySymbol) ? "<unbound>" : e.DisplaySymbol;
-
-        Log.LogError(
-            subcategory: "DotAwait",
-            errorCode: "DOTAWAIT001",
-            helpKeyword: null,
-            file: file,
-            lineNumber: start.Line + 1,
-            columnNumber: start.Character + 1,
-            endLineNumber: end.Line + 1,
-            endColumnNumber: end.Character + 1,
-            message: "Unable to resolve '.Await()' call for rewriting. This build would miss a DotAwait rewrite. Resolved symbol: " + method);
-    }
-
-    void LogAwaitInvalidNonAsyncContext(AwaitRewriter.AwaitRewriteEvent e)
-    {
-        var span = e.Location.GetLineSpan();
-        var file = span.Path;
-        var start = span.StartLinePosition;
-        var end = span.EndLinePosition;
-
-        var method = string.IsNullOrWhiteSpace(e.DisplaySymbol) ? "<unbound>" : e.DisplaySymbol;
-
-        Log.LogError(
-            subcategory: "DotAwait",
-            errorCode: "DOTAWAIT002",
-            helpKeyword: null,
-            file: file,
-            lineNumber: start.Line + 1,
-            columnNumber: start.Character + 1,
-            endLineNumber: end.Line + 1,
-            endColumnNumber: end.Character + 1,
-            message: "'.Await()' can only be used in an async context. Resolved symbol: " + method);
     }
 
     static OutputKind ParseOutputKind(string? outputType)
