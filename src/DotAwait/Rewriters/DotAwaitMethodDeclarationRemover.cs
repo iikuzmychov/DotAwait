@@ -24,24 +24,14 @@ internal sealed class DotAwaitMethodDeclarationRemover : CSharpSyntaxRewriter
             .OfType<MethodDeclarationSyntax>()
             .Where(syntax =>
             {
-                var symbol = _semanticModel.GetDeclaredSymbol(syntax);
+                var method = _semanticModel.GetDeclaredSymbol(syntax);
 
-                if (symbol is null)
+                if (method is null)
                 {
                     return false;
                 }
 
-                if (!symbol.HasAttribute(_dotAwaitAttribute))
-                {
-                    return false;
-                }
-                
-                if (!symbol.IsValidToBeMarkedWithDotAwaitAttribute())
-                {
-                    return false;
-                }
-
-                return true;
+                return method.IsDotAwaitMethod(_dotAwaitAttribute);
             })
             .ToImmutableArray();
 

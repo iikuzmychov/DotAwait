@@ -54,8 +54,8 @@ DotAwait is designed to be safe and not cause unexpected runtime errors. The rew
 
 How:
 
-- All `.Await()` extension methods are implemented as methods with no body
-- For design-time builds DotAwait adds `DOTAWAIT_DESIGN_TIME` symbol that enables stub implementations of these methods
+- All `.Await()` extension methods are implemented as partial methods with no body
+- For design-time builds DotAwait adds `DOTAWAIT_DESIGN_TIME` symbol that enables auto-generated stub implementations of these methods
 
 So:
 
@@ -90,23 +90,12 @@ namespace DotAwait
     internal static partial class DotAwaitTaskExtensions
     {
         [DotAwait]
-        public static T Await<T>(this MyTaskType<T> task)
-#if DOTAWAIT_DESIGN_TIME
-            => throw CreateUnreachableException()
-#endif
-            ;
+        public static partial T Await<T>(this MyTaskType<T> task);
 
         [DotAwait]
-        public static void Await(this MyTaskType task)
-#if DOTAWAIT_DESIGN_TIME
-            => throw CreateUnreachableException()
-#endif
-            ;
-    }
+        public static partial void Await(this MyTaskType task);
 }
 ```
-
-It's planned to simplify stub definition by auto-generating these stubs in future releases.
 
 ## Roadmap
 
@@ -116,7 +105,6 @@ It's planned to simplify stub definition by auto-generating these stubs in futur
 * [ ] Edge-case validation
 * [ ] Ensure `.props` / `.targets` do not affect transitive dependencies
 * [ ] Fix debugger line mapping issues
-* [ ] Auto-generated stubs for custom awaitable types
 * [ ] Visual Studio extension to highlight `.Await()` similarly to the `await` keyword
 
 ## License

@@ -21,6 +21,8 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
     [Output] public ITaskItem[] RewrittenSources { get; set; } = [];
 
+    private sealed record SourceFile(ITaskItem Source, string FullPath, string OutputPath, SyntaxTree Tree);
+
     public override bool Execute()
     {
         try
@@ -37,19 +39,13 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
             var rewritten = new List<ITaskItem>(Sources.Length);
             var unchanged = new List<ITaskItem>(Sources.Length);
 
-            var trees = new List<SyntaxTree>();
-            var treeToSource = new Dictionary<SyntaxTree, (ITaskItem Source, string FullPath, string OutputPath)>();
+            var files = new List<SourceFile>(Sources.Length);
+            var originalTrees = new List<SyntaxTree>(Sources.Length);
 
             foreach (var src in Sources)
             {
                 var fullPath = src.GetMetadata("FullPath");
-                if (string.IsNullOrWhiteSpace(fullPath))
-                {
-                    unchanged.Add(src);
-                    continue;
-                }
-
-                if (!File.Exists(fullPath))
+                if (string.IsNullOrWhiteSpace(fullPath) || !File.Exists(fullPath))
                 {
                     unchanged.Add(src);
                     continue;
@@ -58,55 +54,65 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
                 var outPath = MapOutputPath(fullPath, ProjectDirectory, OutputDirectory);
                 Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
 
-                var original = File.ReadAllText(fullPath, Encoding.UTF8);
-                var tree = CSharpSyntaxTree.ParseText(original, parseOptions, path: fullPath);
+                var originalText = File.ReadAllText(fullPath, Encoding.UTF8);
+                var tree = CSharpSyntaxTree.ParseText(originalText, parseOptions, path: fullPath);
 
-                trees.Add(tree);
-                treeToSource[tree] = (src, fullPath, outPath);
+                files.Add(new SourceFile(src, fullPath, outPath, tree));
+                originalTrees.Add(tree);
             }
 
-            if (trees.Count == 0)
+            if (originalTrees.Count == 0)
             {
-                RewrittenSources = [..rewritten, ..unchanged];
+                RewrittenSources = [.. rewritten, .. unchanged];
                 return true;
             }
 
             var compilation = CSharpCompilation.Create(
                 assemblyName: null,
-                syntaxTrees: trees,
+                syntaxTrees: originalTrees,
                 references: metadataReferences,
                 options: compilationOptions);
 
-            foreach (var tree in trees)
+            // Pass 1: rewrite invocations (based on original compilation)
+            var invocationRewrittenTrees = new List<SyntaxTree>(originalTrees.Count);
+            for (var i = 0; i < files.Count; i++)
             {
-                var (src, fullPath, outPath) = treeToSource[tree];
+                var file = files[i];
+                var model = compilation.GetSemanticModel(file.Tree);
 
-                var model = compilation.GetSemanticModel(tree);
+                var root = (CompilationUnitSyntax)file.Tree.GetRoot();
+                var newRoot = (CompilationUnitSyntax?)new DotAwaitMethodInvocationReplacer(model).Visit(root) ?? root;
+
+                var newTree = file.Tree.WithRootAndOptions(newRoot, file.Tree.Options);
+                invocationRewrittenTrees.Add(newTree);
+            }
+
+            // Build compilation once after pass 1 (no per-file ReplaceSyntaxTree)
+            var invocationRewrittenCompilation =
+                compilation.RemoveSyntaxTrees(originalTrees).AddSyntaxTrees(invocationRewrittenTrees);
+
+            // Pass 2: remove declarations (based on rewritten compilation)
+            for (var i = 0; i < files.Count; i++)
+            {
+                var file = files[i];
+                var tree = invocationRewrittenTrees[i];
+
+                var model = invocationRewrittenCompilation.GetSemanticModel(tree);
+
                 var root = (CompilationUnitSyntax)tree.GetRoot();
-
-                var rewrittenRoot = (CompilationUnitSyntax?)new DotAwaitMethodCallRewriter(model).Visit(root) ?? root;
-
-                // Build a new tree that matches rewrittenRoot
-                var rewrittenTree = tree.WithRootAndOptions(rewrittenRoot, tree.Options);
-
-                // Get a semantic model that matches rewrittenTree
-                var rewrittenCompilation = compilation.ReplaceSyntaxTree(tree, rewrittenTree);
-                var rewrittenModel = rewrittenCompilation.GetSemanticModel(rewrittenTree);
-
-                // Remove any member annotated with [DotAwait] after rewriting.
-                var cleanedRoot = (CompilationUnitSyntax?)new DotAwaitMethodDeclarationRemover(rewrittenModel).Visit(rewrittenRoot) ?? rewrittenRoot;
+                var cleanedRoot = (CompilationUnitSyntax?)new DotAwaitMethodDeclarationRemover(model).Visit(root) ?? root;
 
                 var rewrittenText = cleanedRoot.ToFullString();
+                var withLine = "#line 1 \"" + file.FullPath + "\"\n" + rewrittenText + "\n#line default\n";
 
-                var withLine = "#line 1 \"" + fullPath + "\"\n" + rewrittenText + "\n#line default\n";
-                File.WriteAllText(outPath, withLine, Encoding.UTF8);
+                File.WriteAllText(file.OutputPath, withLine, Encoding.UTF8);
 
-                var item = new TaskItem(outPath);
-                src.CopyMetadataTo(item);
+                var item = new TaskItem(file.OutputPath);
+                file.Source.CopyMetadataTo(item);
                 rewritten.Add(item);
             }
 
-            RewrittenSources = [..rewritten, ..unchanged];
+            RewrittenSources = [.. rewritten, .. unchanged];
             return true;
         }
         catch (Exception ex)
@@ -140,6 +146,7 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
     {
         if (string.IsNullOrWhiteSpace(s))
             return Array.Empty<string>();
+
         return s.Split(new[] { ';', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(x => x.Trim())
                 .Where(x => x.Length != 0)
@@ -150,6 +157,7 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
     {
         if (string.IsNullOrWhiteSpace(s))
             return LanguageVersion.Latest;
+
         var normalized = s.Replace('.', '_');
         return Enum.TryParse(normalized, true, out LanguageVersion v) ? v : LanguageVersion.Latest;
     }
