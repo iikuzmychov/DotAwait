@@ -6,9 +6,7 @@
 
 # DotAwait
 
-DotAwait lets you use `await` in a fluent / LINQ-friendly style via an `.Await()` extension call that gets rewritten at build time.
-
-## Usage
+DotAwait lets you use `await` in a fluent / LINQ-friendly style via an `.Await()` extension call.
 
 While `await` often breaks fluent chains:
 
