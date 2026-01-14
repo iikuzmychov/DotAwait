@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <EnforceExtendedAnalyzerRules>false</EnforceExtendedAnalyzerRules>
     <IsPackable>true</IsPackable>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <GeneratePackageOnBuild Condition="$(Configuration) == 'Debug'">true</GeneratePackageOnBuild>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <DevelopmentDependency>true</DevelopmentDependency>
