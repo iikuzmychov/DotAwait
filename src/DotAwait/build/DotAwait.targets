@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <_DotAwaitTasksDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)tools'))</_DotAwaitTasksDirectory>
-    <_DotAwaitDll>$(_DotAwaitTasksDirectory)\DotAwait.dll</_DotAwaitDll>
+    <_DotAwaitDll>$(_DotAwaitTasksDirectory)/DotAwait.dll</_DotAwaitDll>
     <_DotAwaitReportIssueUrl>https://github.com/iikuzmychov/DotAwait/issues/new</_DotAwaitReportIssueUrl>
   </PropertyGroup>
 
@@ -34,7 +34,7 @@
 
     <PropertyGroup>
       <_DotAwaitIntermediateDirectory>$(IntermediateOutputPath).dotawait</_DotAwaitIntermediateDirectory>
-      <_DotAwaitRewrittenSourcesDirectory>$(_DotAwaitIntermediateDirectory)\src</_DotAwaitRewrittenSourcesDirectory>
+      <_DotAwaitRewrittenSourcesDirectory>$(_DotAwaitIntermediateDirectory)/src</_DotAwaitRewrittenSourcesDirectory>
     </PropertyGroup>
 
   </Target>
