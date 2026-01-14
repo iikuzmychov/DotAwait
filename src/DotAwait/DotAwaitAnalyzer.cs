@@ -24,7 +24,7 @@ public sealed class DotAwaitAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor s_invalidDotAwaitAttributeUsage = new(
         id: "DOTAWAIT002",
         title: "Invalid DotAwaitAttribute usage",
-        messageFormat: "Method '{0}' is marked with DotAwaitAttribute but does not meet the required declaration criteria. It must be an extension partial method with no body and with exactly one parameter. This method will be ignored by DotAwait.",
+        messageFormat: "Method '{0}' is marked with DotAwaitAttribute but does not meet the required declaration criteria. It must be an extension partial method with exactly one parameter. This method will be ignored by DotAwait.",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
