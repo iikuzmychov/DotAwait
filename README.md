@@ -92,6 +92,7 @@ namespace DotAwait
 
         [DotAwait]
         public static partial void Await(this MyTaskType task);
+    }
 }
 ```
 
