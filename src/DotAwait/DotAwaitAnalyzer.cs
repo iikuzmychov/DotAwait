@@ -198,8 +198,10 @@ public sealed class DotAwaitAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        if (context.ContainingSymbol is IMethodSymbol m && m.IsAsync)
+        if (context.ContainingSymbol is IMethodSymbol { IsAsync: true })
+        {
             return true;
+        }
 
         return invocation.Syntax.Ancestors().OfType<GlobalStatementSyntax>().Any();
     }

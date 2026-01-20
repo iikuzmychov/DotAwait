@@ -11,6 +11,8 @@ namespace DotAwait;
 
 public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 {
+    private static readonly Encoding s_utf8WithoutBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
     [Required] public ITaskItem[] Sources { get; set; } = [];
     [Required] public string ProjectDirectory { get; set; } = string.Empty;
     [Required] public string OutputDirectory { get; set; } = string.Empty;
@@ -18,10 +20,9 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
     [Required] public string DefineConstants { get; set; } = string.Empty;
     [Required] public string LangVersion { get; set; } = string.Empty;
     [Required] public ITaskItem[] ReferencePaths { get; set; } = [];
-
-    [Output] public ITaskItem[] RewrittenSources { get; set; } = [];
-
-    private sealed record SourceFile(ITaskItem Source, string FullPath, string OutputPath, SyntaxTree Tree);
+    
+    [Output] 
+    public ITaskItem[] RewrittenSources { get; set; } = [];
 
     public override bool Execute()
     {
@@ -29,88 +30,40 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
         {
             Directory.CreateDirectory(OutputDirectory);
 
-            var parseOptions = new CSharpParseOptions(
-                ParseLangVersion(LangVersion),
-                preprocessorSymbols: SplitConstants(DefineConstants));
-
-            var compilationOptions = new CSharpCompilationOptions(ParseOutputKind(OutputKind));
+            var commandLineArguments = ParseCommandLineArguments();
             var metadataReferences = CreateMetadataReferences(ReferencePaths);
 
-            var rewritten = new List<ITaskItem>(Sources.Length);
-            var unchanged = new List<ITaskItem>(Sources.Length);
+            var (loadedFiles, unchanged) = LoadSourceFiles(commandLineArguments);
+            IReadOnlyList<Source> files = loadedFiles;
 
-            var files = new List<SourceFile>(Sources.Length);
-            var originalTrees = new List<SyntaxTree>(Sources.Length);
-
-            foreach (var src in Sources)
+            if (files.Count == 0)
             {
-                var fullPath = src.GetMetadata("FullPath");
-                if (string.IsNullOrWhiteSpace(fullPath) || !File.Exists(fullPath))
-                {
-                    unchanged.Add(src);
-                    continue;
-                }
-
-                var outPath = MapOutputPath(fullPath, ProjectDirectory, OutputDirectory);
-                Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
-
-                var originalText = File.ReadAllText(fullPath, Encoding.UTF8);
-                var tree = CSharpSyntaxTree.ParseText(originalText, parseOptions, path: fullPath);
-
-                files.Add(new SourceFile(src, fullPath, outPath, tree));
-                originalTrees.Add(tree);
-            }
-
-            if (originalTrees.Count == 0)
-            {
-                RewrittenSources = [.. rewritten, .. unchanged];
+                RewrittenSources = [.. unchanged];
                 return true;
             }
 
-            var compilation = CSharpCompilation.Create(
-                assemblyName: null,
-                syntaxTrees: originalTrees,
-                references: metadataReferences,
-                options: compilationOptions);
+            files = ApplyRewritePass(
+                files,
+                compilation: CreateCompilation(files, metadataReferences, commandLineArguments),
+                useSemanticModel: true,
+                static (_, semanticModel, root) =>
+                    (CompilationUnitSyntax?)new DotAwaitMethodInvocationReplacer(semanticModel!).Visit(root) ?? root);
 
-            // Pass 1: rewrite invocations (based on original compilation)
-            var invocationRewrittenTrees = new List<SyntaxTree>(originalTrees.Count);
-            for (var i = 0; i < files.Count; i++)
-            {
-                var file = files[i];
-                var model = compilation.GetSemanticModel(file.Tree);
+            files = ApplyRewritePass(
+                files,
+                compilation: CreateCompilation(files, metadataReferences, commandLineArguments),
+                useSemanticModel: true,
+                static (_, semanticModel, root) =>
+                    (CompilationUnitSyntax?)new DotAwaitMethodDeclarationRemover(semanticModel!).Visit(root) ?? root);
 
-                var root = (CompilationUnitSyntax)file.Tree.GetRoot();
-                var newRoot = (CompilationUnitSyntax?)new DotAwaitMethodInvocationReplacer(model).Visit(root) ?? root;
+            files = ApplyRewritePass(
+                files,
+                compilation: null,
+                useSemanticModel: false,
+                static (file, _, root) =>
+                    (CompilationUnitSyntax?)new LineDirectiveRewriter(file.OriginalPath).Visit(root) ?? root);
 
-                var newTree = file.Tree.WithRootAndOptions(newRoot, file.Tree.Options);
-                invocationRewrittenTrees.Add(newTree);
-            }
-
-            // Build compilation once after pass 1 (no per-file ReplaceSyntaxTree)
-            var invocationRewrittenCompilation =
-                compilation.RemoveSyntaxTrees(originalTrees).AddSyntaxTrees(invocationRewrittenTrees);
-
-            // Pass 2: remove declarations (based on rewritten compilation)
-            for (var i = 0; i < files.Count; i++)
-            {
-                var file = files[i];
-                var tree = invocationRewrittenTrees[i];
-
-                var model = invocationRewrittenCompilation.GetSemanticModel(tree);
-
-                var root = (CompilationUnitSyntax)tree.GetRoot();
-                var cleanedRoot = (CompilationUnitSyntax?)new DotAwaitMethodDeclarationRemover(model).Visit(root) ?? root;
-
-                var rewrittenText = cleanedRoot.ToFullString();
-                var withLine = "#line 1 \"" + file.FullPath + "\"\n" + rewrittenText + "\n#line default\n";
-
-                File.WriteAllText(file.OutputPath, withLine, Encoding.UTF8);
-
-                var item = new TaskItem(file.OutputPath);
-                file.Source.CopyMetadataTo(item);
-                rewritten.Add(item);
-            }
+            var rewritten = WriteRewrittenFiles(files);
 
             RewrittenSources = [.. rewritten, .. unchanged];
             return true;
@@ -122,19 +75,158 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
         }
     }
 
-    static IReadOnlyList<MetadataReference> CreateMetadataReferences(ITaskItem[] referencePaths)
+    private CSharpCommandLineArguments ParseCommandLineArguments()
+    {
+        return CSharpCommandLineParser.Default.Parse(
+            args:
+            [
+                $"/target:{OutputKind}",
+                $"/langversion:{LangVersion}",
+                $"/define:{DefineConstants}",
+            ],
+            baseDirectory: null,
+            sdkDirectory: null,
+            additionalReferenceDirectories: null);
+    }
+
+    private (List<Source> Files, List<ITaskItem> Unchanged) LoadSourceFiles(CSharpCommandLineArguments commandLineArguments)
+    {
+        var files = new List<Source>(Sources.Length);
+        var unchanged = new List<ITaskItem>(Sources.Length);
+
+        foreach (var sourceItem in Sources)
+        {
+            if (!TryGetExistingFilePath(sourceItem, out var originalPath))
+            {
+                unchanged.Add(sourceItem);
+                continue;
+            }
+
+            var rewrittenPath = MapPath(originalPath, OutputDirectory);
+
+            var rewrittenDirectory = Path.GetDirectoryName(rewrittenPath);
+            if (!string.IsNullOrWhiteSpace(rewrittenDirectory))
+            {
+                Directory.CreateDirectory(rewrittenDirectory);
+            }
+
+            var originalText = File.ReadAllText(originalPath, s_utf8WithoutBom);
+            var tree = CSharpSyntaxTree.ParseText(originalText, commandLineArguments.ParseOptions, path: originalPath);
+
+            files.Add(new Source(sourceItem, originalPath, rewrittenPath, tree));
+        }
+
+        return (files, unchanged);
+    }
+
+    private static bool TryGetExistingFilePath(ITaskItem item, out string fullPath)
+    {
+        fullPath = item.GetMetadata(KnownMetadataNames.FullPath);
+
+        if (string.IsNullOrWhiteSpace(fullPath))
+        {
+            fullPath = item.ItemSpec;
+        }
+
+        if (string.IsNullOrWhiteSpace(fullPath))
+        {
+            return false;
+        }
+
+        fullPath = Path.GetFullPath(fullPath);
+        return File.Exists(fullPath);
+    }
+
+    private static CSharpCompilation CreateCompilation(
+        IReadOnlyList<Source> files,
+        IReadOnlyList<MetadataReference> metadataReferences,
+        CSharpCommandLineArguments commandLineArguments)
+    {
+        return CSharpCompilation.Create(
+            assemblyName: null,
+            syntaxTrees: files.Select(static file => file.Tree),
+            references: metadataReferences,
+            options: commandLineArguments.CompilationOptions);
+    }
+
+    private static IReadOnlyList<Source> ApplyRewritePass(
+        IReadOnlyList<Source> files,
+        CSharpCompilation? compilation,
+        bool useSemanticModel,
+        Func<Source, SemanticModel?, CompilationUnitSyntax, CompilationUnitSyntax> rewrite)
+    {
+        if (useSemanticModel && compilation is null)
+        {
+            throw new ArgumentNullException(nameof(compilation));
+        }
+
+        var rewrittenFiles = new List<Source>(files.Count);
+
+        foreach (var file in files)
+        {
+            var root = (CompilationUnitSyntax)file.Tree.GetRoot();
+
+            var semanticModel = useSemanticModel
+                ? compilation!.GetSemanticModel(file.Tree)
+                : null;
+
+            var rewrittenRoot = rewrite(file, semanticModel, root) ?? root;
+            var rewrittenTree = file.Tree.WithRootAndOptions(rewrittenRoot, file.Tree.Options);
+
+            rewrittenFiles.Add(file with { Tree = rewrittenTree });
+        }
+
+        return rewrittenFiles;
+    }
+
+    private static List<ITaskItem> WriteRewrittenFiles(IReadOnlyList<Source> files)
+    {
+        var rewrittenItems = new List<ITaskItem>(files.Count);
+
+        foreach (var file in files)
+        {
+            var text = file.Tree.GetRoot().ToFullString();
+            File.WriteAllText(file.RewrittenPath, text, s_utf8WithoutBom);
+
+            var rewrittenItem = new TaskItem(file.RewrittenPath);
+            file.TaskItem.CopyMetadataTo(rewrittenItem);
+
+            rewrittenItems.Add(rewrittenItem);
+        }
+
+        return rewrittenItems;
+    }
+
+    private static IReadOnlyList<MetadataReference> CreateMetadataReferences(ITaskItem[] referencePaths)
     {
         var references = new List<MetadataReference>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in referencePaths)
         {
-            var path = item.GetMetadata("FullPath");
-            if (string.IsNullOrWhiteSpace(path))
-                path = item.ItemSpec;
+            var path = item.GetMetadata(KnownMetadataNames.FullPath);
 
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path) || !seen.Add(path))
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                path = item.ItemSpec;
+            }
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
                 continue;
+            }
+
+            path = Path.GetFullPath(path);
+
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            if (!seen.Add(path))
+            {
+                continue;
+            }
 
             references.Add(MetadataReference.CreateFromFile(path));
         }
@@ -142,65 +234,33 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
         return references;
     }
 
-    static string[] SplitConstants(string s)
+    private static string MapPath(string originalPath, string outputDirectoryPath)
     {
-        if (string.IsNullOrWhiteSpace(s))
-            return Array.Empty<string>();
+        var fullPath = Path.GetFullPath(originalPath);
+        var hash = GetStablePathHash(fullPath);
 
-        return s.Split(new[] { ';', ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim())
-                .Where(x => x.Length != 0)
-                .ToArray();
+        var name = Path.GetFileNameWithoutExtension(fullPath);
+        var extension = Path.GetExtension(fullPath);
+
+        return Path.Combine(outputDirectoryPath, $"{name}_{hash}{extension}");
     }
 
-    static LanguageVersion ParseLangVersion(string s)
+    private static string GetStablePathHash(string fullPath)
     {
-        if (string.IsNullOrWhiteSpace(s))
-            return LanguageVersion.Latest;
+        var bytes = s_utf8WithoutBom.GetBytes(fullPath);
 
-        var normalized = s.Replace('.', '_');
-        return Enum.TryParse(normalized, true, out LanguageVersion v) ? v : LanguageVersion.Latest;
-    }
+        using var sha256 = SHA256.Create();
+        var hash = sha256.ComputeHash(bytes);
 
-    static string MapOutputPath(string file, string projectDir, string outDir)
-    {
-        var full = Path.GetFullPath(file);
-        var hash = GetStablePathHash(full);
+        var builder = new StringBuilder(capacity: hash.Length * 2);
 
-        var name = Path.GetFileNameWithoutExtension(full);
-        var ext = Path.GetExtension(full);
-
-        return Path.Combine(outDir, name + "_" + hash + ext);
-    }
-
-    static string GetStablePathHash(string fullPath)
-    {
-        var bytes = Encoding.UTF8.GetBytes(fullPath);
-
-        using var sha = SHA256.Create();
-        var hash = sha.ComputeHash(bytes);
-
-        var sb = new StringBuilder(hash.Length * 2);
-        foreach (var b in hash)
-            sb.Append(b.ToString("x2"));
-
-        return sb.ToString();
-    }
-
-    static OutputKind ParseOutputKind(string? outputType)
-    {
-        switch (outputType?.Trim().ToLowerInvariant())
+        foreach (var value in hash)
         {
-            case "library":
-                return Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary;
-            case "exe":
-                return Microsoft.CodeAnalysis.OutputKind.ConsoleApplication;
-            case "winexe":
-                return Microsoft.CodeAnalysis.OutputKind.WindowsApplication;
-            case "module":
-                return Microsoft.CodeAnalysis.OutputKind.NetModule;
-            default:
-                return Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary;
+            builder.Append(value.ToString("x2"));
         }
+
+        return builder.ToString();
     }
 }
+
+internal sealed record Source(ITaskItem TaskItem, string OriginalPath, string RewrittenPath, SyntaxTree Tree);

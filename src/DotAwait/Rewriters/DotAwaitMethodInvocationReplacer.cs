@@ -38,9 +38,8 @@ internal sealed class DotAwaitMethodInvocationReplacer : CSharpSyntaxRewriter
         var visitedOperand = (ExpressionSyntax)Visit(operand);
 
         return SyntaxFactory
-            .AwaitExpression(SyntaxFactory
-                .ParenthesizedExpression(visitedOperand)
-                .WithTriviaFrom(node));
+            .AwaitExpression(SyntaxFactory.ParenthesizedExpression(visitedOperand))
+            .WithTriviaFrom(node);
     }
 
     private static bool TryGetAwaitOperand(
