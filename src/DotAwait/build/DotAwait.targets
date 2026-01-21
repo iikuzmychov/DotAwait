@@ -3,7 +3,6 @@
   <PropertyGroup>
     <_DotAwaitTasksDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)tools'))</_DotAwaitTasksDirectory>
     <_DotAwaitDll>$(_DotAwaitTasksDirectory)/DotAwait.dll</_DotAwaitDll>
-    <_DotAwaitReportIssueUrl>https://github.com/iikuzmychov/DotAwait/issues/new</_DotAwaitReportIssueUrl>
   </PropertyGroup>
 
   <UsingTask TaskName="DotAwait.RewriteSourcesTask" AssemblyFile="$(_DotAwaitDll)" TaskFactory="TaskHostFactory" />
@@ -28,9 +27,7 @@
           BeforeTargets="CoreCompile"
           Condition="'$(DesignTimeBuild)' != 'true' and '$(IsCrossTargetingBuild)' != 'true'">
 
-    <Error Condition="'$(IntermediateOutputPath)' == ''"
-           Text="[DotAwait] IntermediateOutputPath is empty. Please, report this issue at $(_DotAwaitReportIssueUrl)"
-           HelpLink="$(_DotAwaitReportIssueUrl)" />
+    <Error Condition="'$(IntermediateOutputPath)' == ''" Text="[DotAwait] IntermediateOutputPath is empty." />
 
     <PropertyGroup>
       <_DotAwaitIntermediateDirectory>$(IntermediateOutputPath).dotawait</_DotAwaitIntermediateDirectory>

@@ -1,4 +1,5 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using DotAwait.WellKnown;
+using Microsoft.CodeAnalysis;
 
 namespace DotAwait.Extensions;
 
@@ -11,7 +12,7 @@ internal static class CompilationExtensions
             throw new ArgumentNullException(nameof(compilation));
         }
 
-        return compilation.GetTypeByMetadataName(Constants.DotAwaitAttributeFullName);
+        return compilation.GetTypeByMetadataName(WellKnownTypeFullNames.DotAwaitAttribute);
     }
 
     public static INamedTypeSymbol GetDotAwaitAttributeClassOrThrow(this Compilation compilation)

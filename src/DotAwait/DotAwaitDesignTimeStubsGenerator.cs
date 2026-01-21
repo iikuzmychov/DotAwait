@@ -1,3 +1,4 @@
+using DotAwait.WellKnown;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -11,7 +12,7 @@ public sealed class DotAwaitDesignTimeStubsGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var candidates = context.SyntaxProvider.ForAttributeWithMetadataName(
-            fullyQualifiedMetadataName: Constants.DotAwaitAttributeFullName,
+            fullyQualifiedMetadataName: WellKnownTypeFullNames.DotAwaitAttribute,
             predicate: static (node, _) =>
                 node is MethodDeclarationSyntax m
                 && m.Body is null

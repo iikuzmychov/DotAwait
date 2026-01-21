@@ -10,6 +10,11 @@ internal sealed class LineDirectiveRewriter : CSharpSyntaxRewriter
 
     public LineDirectiveRewriter(string originalPath)
     {
+        if (string.IsNullOrWhiteSpace(originalPath))
+        {
+            throw new ArgumentException("Value cannot be null or whitespace.", nameof(originalPath));
+        }
+
         _originalPath = originalPath;
     }
 

@@ -1,4 +1,5 @@
 ﻿using DotAwait.Rewriters;
+using DotAwait.WellKnown;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Microsoft.CodeAnalysis;
@@ -121,7 +122,7 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
     private static bool TryGetExistingFilePath(ITaskItem item, out string fullPath)
     {
-        fullPath = item.GetMetadata(KnownMetadataNames.FullPath);
+        fullPath = item.GetMetadata(WellKnownMetadataNames.FullPath);
 
         if (string.IsNullOrWhiteSpace(fullPath))
         {
@@ -204,7 +205,7 @@ public sealed partial class RewriteSourcesTask : Microsoft.Build.Utilities.Task
 
         foreach (var item in referencePaths)
         {
-            var path = item.GetMetadata(KnownMetadataNames.FullPath);
+            var path = item.GetMetadata(WellKnownMetadataNames.FullPath);
 
             if (string.IsNullOrWhiteSpace(path))
             {
